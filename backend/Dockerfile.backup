@@ -2,17 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies including CMake for dlib
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     curl \
     libpq-dev \
-    cmake \
-    libopenblas-dev \
-    liblapack-dev \
-    libx11-dev \
-    libgtk-3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
