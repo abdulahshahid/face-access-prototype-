@@ -1,6 +1,6 @@
-const API_URL = window.location.origin.includes('localhost') 
-    ? 'http://localhost:8000/api' 
-    : '/api';
+// 1. FIXED: Use relative path. Nginx handles the routing automatically.
+// This works on localhost, 89.117.49.7, or any domain.
+const API_URL = '/api';
 
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
@@ -63,14 +63,25 @@ async function uploadCSV(file) {
         });
 
         const data = await response.json();
+        console.log("Server Response:", data); // Debugging line
 
         if (response.ok) {
-            showMessage(`✅ Successfully processed ${data.total_processed} attendees!`, 'success');
-            displayResults(data.results);
+            showMessage(`✅ Successfully processed attendees!`, 'success');
+            
+            // 2. FIXED: Handle different response structures safely
+            if (data.results && Array.isArray(data.results)) {
+                displayResults(data.results);
+            } else if (data.invite_codes && Array.isArray(data.invite_codes)) {
+                displayResults(data.invite_codes);
+            } else {
+                console.warn("Unexpected data structure:", data);
+                showMessage("✅ Upload successful, but no list returned to display.", "success");
+            }
         } else {
             throw new Error(data.detail || 'Upload failed');
         }
     } catch (error) {
+        console.error("Upload Error:", error);
         showMessage(`❌ Error: ${error.message}`, 'error');
     } finally {
         loadingDiv.classList.remove('show');
@@ -78,17 +89,24 @@ async function uploadCSV(file) {
     }
 }
 
-function displayResults(results) {
+function displayResults(items) {
     resultsList.innerHTML = '';
-    results.forEach(item => {
+    
+    // Safety check before looping
+    if (!items || !Array.isArray(items)) {
+        console.error("displayResults received invalid data:", items);
+        return;
+    }
+
+    items.forEach(item => {
         const div = document.createElement('div');
         div.className = 'result-item';
         div.innerHTML = `
             <div>
-                <strong>${item.name}</strong><br>
-                <small>${item.email}</small>
+                <strong>${item.name || 'Unknown'}</strong><br>
+                <small>${item.email || 'No Email'}</small>
             </div>
-            <span class="invite-code">${item.invite_code}</span>
+            <span class="invite-code">${item.invite_code || item.code || 'N/A'}</span>
         `;
         resultsList.appendChild(div);
     });

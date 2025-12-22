@@ -1,6 +1,4 @@
-const API_URL = window.location.origin.includes('localhost') 
-    ? 'http://localhost:8000/api' 
-    : '/api';
+const API_URL = '/api';
 
 const verifyBtn = document.getElementById('verifyBtn');
 const captureBtn = document.getElementById('captureBtn');

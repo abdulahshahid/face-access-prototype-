@@ -1,7 +1,4 @@
-const API_URL = window.location.origin.includes('localhost') 
-    ? 'http://localhost:8000/api' 
-    : '/api';
-
+const API_URL = '/api';
 let stream = null;
 const video = document.getElementById('video');
 const startBtn = document.getElementById('startBtn');
