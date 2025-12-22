@@ -1,29 +1,27 @@
+# app/models/embedding.py
 from sqlalchemy import Column, String, Float, ForeignKey, Integer
 from sqlalchemy.orm import relationship
 from pydantic import BaseModel as PydanticBase
 from typing import Optional
 from app.db.base import Base, BaseModel
 
-# Database Models
 class FaceEmbedding(Base, BaseModel):
     __tablename__ = "face_embeddings"
-    
+
     attendee_id = Column(Integer, ForeignKey("attendees.id"), nullable=False)
-    embedding_id = Column(String, unique=True, nullable=False)  # Qdrant point ID
+    embedding_id = Column(String, unique=True, nullable=False)
     confidence = Column(Float, nullable=False)
-    
-    # Relationship
+
     attendee = relationship("Attendee", backref="embeddings")
 
-# Pydantic Schemas
 class AccessCheckResponse(PydanticBase):
-    status: str  # "OK" or "NO"
+    status: str
     message: str
     confidence: float
     matched_attendee_id: Optional[int] = None
 
 class RegistrationResponse(PydanticBase):
-    status: str  # "success" or "error"
+    status: str
     message: str
     attendee_id: Optional[int] = None
 
