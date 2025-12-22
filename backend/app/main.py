@@ -6,17 +6,22 @@ import uvicorn
 
 # Import routers
 from app.api.routes import health, register, access_check, upload_csv, invite
+from app.core.logging import setup_logging
 from app.db.session import SessionLocal, engine
 from app.db.base import Base
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Setup logging
+setup_logging()
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create database tables
-    logger.info("Starting up... Creating database tables if they don't exist")
+    """Lifespan events for startup and shutdown"""
+    # Startup
+    logger.info("🚀 Starting Face Access Control System...")
+    
+    # Create database tables
+    logger.info("📦 Creating database tables...")
     Base.metadata.create_all(bind=engine)
     
     # Test database connection
@@ -27,58 +32,55 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Database connection successful")
     except Exception as e:
         logger.error(f"❌ Database connection failed: {e}")
+        raise
     
     yield
     
     # Shutdown
-    logger.info("Shutting down...")
+    logger.info("👋 Shutting down...")
 
-# Create FastAPI app with lifespan
+# Create FastAPI app
 app = FastAPI(
     title="Face Access Control System",
-    description="A facial recognition-based access control system",
+    description="Prototype - Facial recognition access control with privacy by design",
     version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
     lifespan=lifespan
 )
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # For prototype only
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(health.router, tags=["Health"])
+# Include routers with appropriate prefixes
+app.include_router(health.router, prefix="/api", tags=["Health"])
+app.include_router(upload_csv.router, prefix="/api", tags=["Organizer"])
+app.include_router(invite.router, prefix="/api", tags=["Invitation"])
 app.include_router(register.router, prefix="/api", tags=["Registration"])
 app.include_router(access_check.router, prefix="/api", tags=["Access Check"])
-app.include_router(upload_csv.router, prefix="/api", tags=["Upload"])
-app.include_router(invite.router, prefix="/api", tags=["Invite"])
 
 @app.get("/")
 async def root():
+    """Root endpoint with API information"""
     return {
-        "message": "Face Access Control System API",
+        "service": "Face Access Control System",
         "version": "1.0.0",
+        "status": "operational",
         "docs": "/docs",
         "endpoints": {
-            "health": "/health",
+            "health": "/api/health",
+            "upload_csv": "/api/upload-csv",
+            "generate_invite": "/api/generate-invite",
             "register": "/api/register",
-            "access_check": "/api/access",
-            "upload_csv": "/api/upload",
-            "invite": "/api/invite"
-        }
-    }
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint (also available via /health router)"""
-    return {
-        "status": "healthy",
-        "service": "face-access-control",
-        "database": "connected"
+            "access_check": "/api/access-check"
+        },
+        "privacy_note": "No photos or ID documents stored - only facial embeddings"
     }
 
 if __name__ == "__main__":
