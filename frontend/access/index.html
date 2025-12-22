@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Check - Face Access</title>
+    <style>
+        body { font-family: sans-serif; background: #222; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .container { text-align: center; width: 100%; max-width: 640px; padding: 20px; }
+        video { width: 100%; border-radius: 10px; background: #000; transform: scaleX(-1); border: 3px solid #444; }
+        video.active { border-color: #667eea; }
+        .controls { margin-top: 20px; }
+        button { padding: 15px 30px; font-size: 18px; border-radius: 30px; border: none; cursor: pointer; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; transition: transform 0.2s; }
+        button:hover { transform: scale(1.05); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #result { margin-top: 20px; min-height: 60px; }
+        .result { padding: 15px; border-radius: 10px; background: #333; animation: fadeIn 0.3s; }
+        .result.ok { background: #28a745; }
+        .result.no { background: #dc3545; }
+        .info { font-size: 14px; margin-top: 5px; opacity: 0.9; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚪 Access Check</h1>
+        <div class="video-wrapper">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+        </div>
+        
+        <div class="controls">
+            <button id="startBtn">📷 Activate Camera</button>
+            <button id="checkBtn" style="display: none;">🔍 Check Access</button>
+        </div>
+
+        <div id="result"></div>
+        <p style="margin-top: 30px;"><a href="/" style="color: #aaa;">&larr; Back to Home</a></p>
+    </div>
+    <script src="camera.js"></script>
+</body>
+</html>

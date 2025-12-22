@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register Face - Face Access</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .container { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 500px; text-align: center; }
+        input { width: 100%; padding: 12px; margin: 15px 0; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; text-align: center; }
+        input:focus { border-color: #667eea; outline: none; }
+        video { width: 100%; border-radius: 10px; background: #000; transform: scaleX(-1); margin-bottom: 15px; display: none; }
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; color: white; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); transition: 0.3s; margin-top: 10px; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .step { display: none; }
+        .step.active { display: block; }
+        .error { color: #dc3545; margin-top: 10px; font-size: 14px; }
+        .success { color: #28a745; margin-top: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✨ Registration</h1>
+        
+        <div id="step1" class="step active">
+            <p>Please enter your invitation code</p>
+            <input type="text" id="inviteCode" placeholder="Enter Invite Code (e.g., INV-1234)">
+            <button class="btn" id="verifyBtn">Next</button>
+            <div id="msg1"></div>
+        </div>
+
+        <div id="step2" class="step">
+            <p>Position your face in the camera</p>
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+            <button class="btn" id="captureBtn">Register My Face</button>
+            <div id="msg2"></div>
+        </div>
+
+        <div id="step3" class="step">
+            <div style="font-size: 50px;">✅</div>
+            <h2>Registration Complete!</h2>
+            <p>You can now use the Access Check.</p>
+            <a href="/" class="btn" style="display:block; text-decoration:none; line-height: 20px;">Return Home</a>
+        </div>
+    </div>
+    <script src="camera.js"></script>
+</body>
+</html>
