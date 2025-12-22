@@ -1,18 +1,20 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.db.session import get_db
+from sqlalchemy import text  # <--- IMPORTED text
+from db.session import get_db
 import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-@router.get("")
+# Changed from "" to "/health" so the URL becomes /api/health
+@router.get("/health")
 async def health_check(db: Session = Depends(get_db)):
     """Health check endpoint"""
     try:
-        # Test database connection
-        db.execute("SELECT 1")
-        
+        # Test database connection using text() wrapper
+        db.execute(text("SELECT 1"))
+
         return {
             "status": "healthy",
             "database": "connected",
@@ -23,4 +25,4 @@ async def health_check(db: Session = Depends(get_db)):
         return {
             "status": "unhealthy",
             "error": str(e)
-        }   
+        }

@@ -1,8 +1,8 @@
 from typing import Optional
 import logging
-from app.services.face_embedding import face_embedding_service
-from app.services.vector_store import vector_store
-from app.core.config import settings
+from services.face_embedding import face_embedding_service
+from services.vector_store import vector_store
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 

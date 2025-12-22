@@ -1,14 +1,21 @@
+import sys
+import os
+
+# Add /app to Python path
+sys.path.insert(0, '/app')
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 import uvicorn
+from sqlalchemy import text  # <--- ADDED THIS IMPORT
 
 # Import routers
-from app.api.routes import health, register, access_check, upload_csv, invite
-from app.core.logging import setup_logging
-from app.db.session import SessionLocal, engine
-from app.db.base import Base
+from api.routes import health, register, access_check, upload_csv, invite
+from db.session import SessionLocal, engine
+from db.base import Base
+from core.logging import setup_logging
 
 # Setup logging
 setup_logging()
@@ -19,23 +26,23 @@ async def lifespan(app: FastAPI):
     """Lifespan events for startup and shutdown"""
     # Startup
     logger.info("🚀 Starting Face Access Control System...")
-    
+
     # Create database tables
     logger.info("📦 Creating database tables...")
     Base.metadata.create_all(bind=engine)
-    
+
     # Test database connection
     try:
         db = SessionLocal()
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))  # <--- FIXED: Wrapped in text()
         db.close()
         logger.info("✅ Database connection successful")
     except Exception as e:
         logger.error(f"❌ Database connection failed: {e}")
         raise
-    
+
     yield
-    
+
     # Shutdown
     logger.info("👋 Shutting down...")
 
@@ -58,7 +65,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers with appropriate prefixes
+# Include routers
 app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(upload_csv.router, prefix="/api", tags=["Organizer"])
 app.include_router(invite.router, prefix="/api", tags=["Invitation"])

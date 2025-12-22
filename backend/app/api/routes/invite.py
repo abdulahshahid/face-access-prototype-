@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import logging
-from app.db.session import get_db
-from app.models.attendee import Attendee
-from app.models.embedding import InviteResponse
-from app.utils.crypto import generate_random_string
+from db.session import get_db
+from models.attendee import Attendee
+from models.embedding import InviteResponse
+from utils.crypto import generate_random_string
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

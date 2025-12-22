@@ -2,13 +2,13 @@ from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 import logging
 from datetime import datetime
-from app.db.session import get_db
-from app.models.attendee import Attendee
-from app.models.embedding import RegistrationResponse
-from app.services.face_detection import face_detection_service
-from app.services.liveness import liveness_service
-from app.services.face_embedding import face_embedding_service
-from app.services.vector_store import vector_store
+from db.session import get_db
+from models.attendee import Attendee
+from models.embedding import RegistrationResponse
+from services.face_detection import face_detection_service
+from services.liveness import liveness_service
+from services.face_embedding import face_embedding_service
+from services.vector_store import vector_store
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -4,7 +4,7 @@ import numpy as np
 import logging
 import uuid
 from typing import List, Dict, Optional
-from app.core.config import settings
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 

@@ -1,8 +1,8 @@
-from sqlalchemy import Column, String, Float, ForeignKey, Integer
+from sqlalchemy import Column, String, Float, ForeignKey, Integer, DateTime
 from sqlalchemy.orm import relationship
 from pydantic import BaseModel as PydanticBase
 from typing import Optional
-from app.db.base import Base, BaseModel
+from db.base import Base, BaseModel
 
 # Database Models
 class FaceEmbedding(Base, BaseModel):

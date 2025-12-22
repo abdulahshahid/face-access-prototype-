@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 import jwt
-from app.core.config import settings
+from core.config import settings
 
 def generate_registration_code() -> str:
     """Generate unique registration code"""

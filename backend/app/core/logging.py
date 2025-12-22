@@ -19,7 +19,7 @@ def setup_logging():
     # File handler (optional)
     try:
         file_handler = RotatingFileHandler(
-            'app.log',
+            'log',
             maxBytes=10485760,  # 10MB
             backupCount=5
         )
