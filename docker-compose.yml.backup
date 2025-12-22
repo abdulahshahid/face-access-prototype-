@@ -28,8 +28,9 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 30s    # INCREASED from 5s to 30s
+      retries: 10     # INCREASED from 5 to 10
+      start_period: 40s  # ADDED: Wait 40s before first health check
 
   backend:
     build:

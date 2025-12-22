@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
@@ -26,11 +24,11 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD-SHELL", "timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/6333' && echo Port open || exit 1"]
       interval: 10s
-      timeout: 30s    # INCREASED from 5s to 30s
-      retries: 10     # INCREASED from 5 to 10
-      start_period: 40s  # ADDED: Wait 40s before first health check
+      timeout: 30s
+      retries: 10
+      start_period: 40s
 
   backend:
     build:
@@ -47,7 +45,7 @@ services:
       postgres:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started  # Only require it to be started, not healthy
     networks:
       - app-network
     healthcheck:

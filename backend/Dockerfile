@@ -1,29 +1,14 @@
 FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /code
+COPY . /code
 
-# Install system dependencies including CMake for dlib
 RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    curl \
-    libpq-dev \
-    cmake \
-    libopenblas-dev \
-    liblapack-dev \
-    libx11-dev \
-    libgtk-3-dev \
-    && rm -rf /var/lib/apt/lists/*
+    gcc g++ curl libpq-dev cmake libopenblas-dev liblapack-dev \
+    libx11-dev libgtk-3-dev && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
-
-# Expose port
 EXPOSE 8000
 
-# Run the application
-CMD ["python", "main.py"]
+CMD ["python", "app/main.py"]
