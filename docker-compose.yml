@@ -5,7 +5,7 @@ services:
     image: postgres:15-alpine
     environment:
       POSTGRES_USER: faceaccess
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:1234}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-1234}
       POSTGRES_DB: faceaccess
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -36,9 +36,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://faceaccess:${POSTGRES_PASSWORD:1234@postgres:5432/faceaccess
+      DATABASE_URL: postgresql://faceaccess:${POSTGRES_PASSWORD:-1234}@postgres:5432/faceaccess
       QDRANT_URL: http://qdrant:6333
-      SECRET_KEY: ${SECRET_KEY:ea03da06bae3cf7a79d92303f6d0f3348ef0fb15f25b2e8183f63aca93f9db7c}
+      SECRET_KEY: ${SECRET_KEY:-ea03da06bae3cf7a79d92303f6d0f3348ef0fb15f25b2e8183f63aca93f9db7c}
       ENVIRONMENT: ${ENVIRONMENT:-production}
     volumes:
       - ./backend:/app
