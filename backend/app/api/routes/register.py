@@ -1,90 +1,110 @@
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
+import face_recognition
+import cv2
+import numpy as np
 import logging
-from datetime import datetime
 from db.session import get_db
 from models.attendee import Attendee
-from models.embedding import RegistrationResponse
-from services.face_detection import face_detection_service
-from services.liveness import liveness_service
-from services.face_embedding import face_embedding_service
-from services.vector_store import vector_store
+from core.config import settings
+from qdrant_client import QdrantClient
+from qdrant_client.http.models import PointStruct, VectorParams, Distance
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-@router.post("/register", response_model=RegistrationResponse)
-async def register_attendee(
-    invitation_id: str = Form(...),
-    registration_code: str = Form(...),
-    photo: UploadFile = File(...),
+# Initialize Qdrant Client
+qdrant = QdrantClient(url=settings.QDRANT_URL)
+COLLECTION_NAME = "faces"
+
+# Ensure collection exists
+try:
+    qdrant.get_collection(COLLECTION_NAME)
+except:
+    qdrant.create_collection(
+        collection_name=COLLECTION_NAME,
+        vectors_config=VectorParams(size=128, distance=Distance.COSINE)
+    )
+
+@router.post("/register")
+async def register_face(
+    invite_code: str = Form(...),  # <--- Read from Form Data
+    photo: UploadFile = File(...), 
     db: Session = Depends(get_db)
 ):
     """
-    Register attendee using invitation code and facial photo
+    Register a face using an invite code.
+    1. Validate invite code
+    2. Detect face in photo
+    3. Generate embedding
+    4. Save to Qdrant (Vector DB)
+    5. Update status in Postgres
     """
     try:
-        # Validate invitation
-        attendee = db.query(Attendee).filter(
-            Attendee.invitation_id == invitation_id,
-            Attendee.registration_code == registration_code,
-            Attendee.is_registered == False
-        ).first()
-        
+        # 1. Validate User
+        attendee = db.query(Attendee).filter(Attendee.invite_code == invite_code).first()
         if not attendee:
-            raise HTTPException(status_code=400, detail="Invalid or expired invitation")
+            raise HTTPException(status_code=404, detail="Invalid invite code")
         
-        if attendee.invitation_expires_at and attendee.invitation_expires_at < datetime.utcnow():
-            raise HTTPException(status_code=400, detail="Invitation expired")
+        if attendee.status == "registered":
+            raise HTTPException(status_code=400, detail="User already registered")
+
+        # 2. Process Image
+        content = await photo.read()
+        nparr = np.frombuffer(content, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
-        # Read image
-        image_bytes = await photo.read()
+        if image is None:
+            raise HTTPException(status_code=400, detail="Invalid image file")
+
+        # Convert to RGB (dlib expects RGB)
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        # 3. Detect Face & Generate Embedding
+        face_locations = face_recognition.face_locations(rgb_image)
+        if not face_locations:
+            raise HTTPException(status_code=400, detail="No face detected. Please try again.")
         
-        # Validate single face
-        has_single_face = await face_detection_service.validate_single_face(image_bytes)
-        if not has_single_face:
-            raise HTTPException(
-                status_code=400,
-                detail="No valid face detected or multiple faces found"
-            )
-        
-        # Basic liveness check
-        is_live, liveness_confidence, reason = await liveness_service.check_liveness(image_bytes)
-        if not is_live:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Liveness check failed: {reason}"
-            )
-        
-        # Generate facial embedding
-        embedding = await face_embedding_service.generate_embedding(image_bytes)
-        if embedding is None:
-            raise HTTPException(
-                status_code=400,
-                detail="Could not generate facial embedding"
-            )
-        
-        # Store embedding in vector database
-        embedding_id = await vector_store.store_embedding(attendee.id, embedding)
-        
-        # Update attendee as registered
-        attendee.is_registered = True
-        attendee.registration_date = datetime.utcnow()
-        attendee.status = "registered"
-        
-        db.commit()
-        
-        logger.info(f"✅ Registered attendee {attendee.name} (ID: {attendee.id})")
-        
-        return RegistrationResponse(
-            status="success",
-            message="Registration successful",
-            attendee_id=attendee.id
+        if len(face_locations) > 1:
+            raise HTTPException(status_code=400, detail="Multiple faces detected. Only one person allowed.")
+
+        # Get 128-d face encoding
+        face_encodings = face_recognition.face_encodings(rgb_image, face_locations)
+        if not face_encodings:
+            raise HTTPException(status_code=400, detail="Could not extract features from face.")
+            
+        embedding = face_encodings[0].tolist()
+
+        # 4. Save to Qdrant (Vector DB)
+        qdrant.upsert(
+            collection_name=COLLECTION_NAME,
+            points=[
+                PointStruct(
+                    id=attendee.id,  # Use Postgres ID as Qdrant ID
+                    vector=embedding,
+                    payload={
+                        "name": attendee.name,
+                        "email": attendee.email,
+                        "invite_code": attendee.invite_code
+                    }
+                )
+            ]
         )
-    
-    except HTTPException:
-        raise
+
+        # 5. Update Status in Postgres
+        attendee.status = "registered"
+        db.commit()
+
+        logger.info(f"✅ Successfully registered face for {attendee.name} ({attendee.email})")
+
+        return {
+            "status": "success",
+            "message": f"Welcome {attendee.name}, registration complete!",
+            "attendee_id": attendee.id
+        }
+
+    except HTTPException as he:
+        raise he
     except Exception as e:
         logger.error(f"Registration error: {str(e)}")
-        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

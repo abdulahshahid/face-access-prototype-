@@ -6,7 +6,7 @@ const inviteInput = document.getElementById('inviteCode');
 const video = document.getElementById('video');
 let inviteCode = '';
 
-// Step 1: Verify Code (Basic check, real verification happens on submit)
+// Step 1: Verify Code
 verifyBtn.addEventListener('click', () => {
     inviteCode = inviteInput.value.trim();
     if (inviteCode.length < 5) {
@@ -45,12 +45,12 @@ async function registerUser(blob) {
     const formData = new FormData();
     formData.append('photo', blob, 'face.jpg');
     
-    // Append invite code as query param or form data depending on your backend
-    // Based on your previous backend, it likely expects query param or form field
-    // We will try query param first as per standard FastAPI patterns
+    // --- FIX: Append code to BODY, not URL ---
+    formData.append('invite_code', inviteCode);
     
     try {
-        const response = await fetch(`${API_URL}/register?invite_code=${inviteCode}`, {
+        // --- FIX: No query params here ---
+        const response = await fetch(`${API_URL}/register`, {
             method: 'POST',
             body: formData
         });

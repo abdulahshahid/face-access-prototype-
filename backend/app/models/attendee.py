@@ -1,25 +1,17 @@
-from sqlalchemy import Column, String, Boolean, Integer, DateTime
-from db.base import Base, BaseModel
+from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy.sql import func
+from db.base import Base
 
-class Attendee(Base, BaseModel):
+class Attendee(Base):
     __tablename__ = "attendees"
 
-    # CSV fields
+    id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    email = Column(String, unique=True, nullable=False)
-    dni = Column(String, unique=True, nullable=True)
-
-    # Registration fields
-    registration_date = Column(DateTime, nullable=True)
-    registration_code = Column(String, unique=True, nullable=True)
-    is_registered = Column(Boolean, default=False, nullable=False)
-
-    # Invitation
-    invitation_id = Column(String, unique=True, nullable=True)
-    invitation_expires_at = Column(DateTime, nullable=True)
-
-    # Status
-    status = Column(String, default="pending", nullable=False)
-
-    def __repr__(self):
-        return f"<Attendee {self.name} ({self.email})>"
+    email = Column(String, unique=True, index=True, nullable=False)
+    dni = Column(String, unique=True, index=True, nullable=True)
+    
+    # This is the column that was missing
+    invite_code = Column(String, unique=True, index=True) 
+    
+    status = Column(String, default="pending")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

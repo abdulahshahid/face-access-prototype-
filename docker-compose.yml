@@ -34,6 +34,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # --- ADDED: Expose port 8000 to the host ---
+    ports:
+      - "8000:8000"
+    # -------------------------------------------
     environment:
       DATABASE_URL: postgresql://faceaccess:${POSTGRES_PASSWORD:-1234}@postgres:5432/faceaccess
       QDRANT_URL: http://qdrant:6333
@@ -45,7 +49,7 @@ services:
       postgres:
         condition: service_healthy
       qdrant:
-        condition: service_started  # Only require it to be started, not healthy
+        condition: service_started
     networks:
       - app-network
     healthcheck:
