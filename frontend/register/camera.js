@@ -8,23 +8,32 @@ const overlay = document.getElementById('overlay');
 const instruction = document.getElementById('livenessInstruction');
 const captureCanvas = document.getElementById('captureCanvas');
 
+// New DOM Elements
+const step1 = document.getElementById('step1');
+const step2 = document.getElementById('step2');
+const stepPreview = document.getElementById('step-preview');
+const step3 = document.getElementById('step3');
+const previewImg = document.getElementById('previewImg');
+const retakeBtn = document.getElementById('retakeBtn');
+const confirmBtn = document.getElementById('confirmBtn');
+
 let inviteCode = '';
 let modelsLoaded = false;
 let isBlinking = false;
 let livenessConfirmed = false;
+let blinkInterval = null; // Store interval to clear it later
+let capturedBlob = null;  // Store the blob for upload
 
-// --- NEW: Check URL for Invite Code on Load ---
+// --- Check URL for Invite Code on Load ---
 document.addEventListener('DOMContentLoaded', () => {
     const params = new URLSearchParams(window.location.search);
     const codeFromUrl = params.get('code');
-    
+
     if (codeFromUrl) {
-        // Pre-fill and auto-start
         inviteInput.value = codeFromUrl;
         verifyBtn.click();
     }
 });
-// ----------------------------------------------
 
 verifyBtn.addEventListener('click', () => {
     inviteCode = inviteInput.value.trim();
@@ -32,25 +41,49 @@ verifyBtn.addEventListener('click', () => {
         document.getElementById('msg1').innerHTML = '<div class="error">Invalid code format</div>';
         return;
     }
-    document.getElementById('step1').classList.add('hidden');
-    document.getElementById('step2').classList.remove('hidden');
-    
+    step1.classList.add('hidden');
+    step2.classList.remove('hidden');
+
     startLivenessCheck();
 });
+
+// --- NEW: Retake and Confirm Logic ---
+retakeBtn.addEventListener('click', () => {
+    stepPreview.classList.add('hidden');
+    step2.classList.remove('hidden');
+    
+    // Reset State
+    livenessConfirmed = false;
+    isBlinking = false;
+    capturedBlob = null;
+    
+    instruction.innerText = "Please BLINK to capture photo 📸";
+    instruction.style.color = "#007bff";
+    
+    video.play();
+    detectBlink(); // Restart detection loop
+});
+
+confirmBtn.addEventListener('click', () => {
+    if (capturedBlob) {
+        registerUser(capturedBlob);
+    }
+});
+// -------------------------------------
 
 async function startLivenessCheck() {
     try {
         instruction.innerText = "Loading AI Models...";
-        
+
         await faceapi.nets.tinyFaceDetector.loadFromUri('/libs');
         await faceapi.nets.faceLandmark68TinyNet.loadFromUri('/libs');
-        
+
         modelsLoaded = true;
-        
+
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
         video.srcObject = stream;
         videoContainer.style.display = 'block';
-        
+
         video.onloadedmetadata = () => {
             video.play();
             detectBlink();
@@ -64,13 +97,14 @@ async function startLivenessCheck() {
 
 async function detectBlink() {
     if (livenessConfirmed) return;
+    if (blinkInterval) clearInterval(blinkInterval); // Ensure no duplicate loops
 
     instruction.innerText = "Please BLINK to capture photo 📸";
 
     const displaySize = { width: video.videoWidth, height: video.videoHeight };
     faceapi.matchDimensions(overlay, displaySize);
 
-    setInterval(async () => {
+    blinkInterval = setInterval(async () => {
         if (livenessConfirmed) return;
 
         const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks(true);
@@ -82,7 +116,6 @@ async function detectBlink() {
             const leftEye = landmarks.getLeftEye();
             const rightEye = landmarks.getRightEye();
 
-            // Calculate EAR
             const avgEAR = (getEAR(leftEye) + getEAR(rightEye)) / 2;
 
             if (avgEAR < 0.25) { // Blink Threshold
@@ -91,7 +124,10 @@ async function detectBlink() {
                     instruction.innerText = "Blink Detected! Capturing...";
                     instruction.style.color = "#28a745";
                     livenessConfirmed = true;
-                    setTimeout(() => captureAndRegister(), 500);
+                    clearInterval(blinkInterval); // Stop detecting
+                    
+                    // Show Preview instead of registering immediately
+                    setTimeout(() => captureAndPreview(), 500);
                 }
             } else {
                 isBlinking = false;
@@ -112,34 +148,50 @@ function dist(p1, p2) {
     return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
 }
 
-async function captureAndRegister() {
+// Replaced captureAndRegister with captureAndPreview
+async function captureAndPreview() {
     captureCanvas.width = video.videoWidth;
     captureCanvas.height = video.videoHeight;
     captureCanvas.getContext('2d').drawImage(video, 0, 0);
-    captureCanvas.toBlob(blob => registerUser(blob), 'image/jpeg', 0.95);
+    
+    // Convert to blob and show preview
+    captureCanvas.toBlob(blob => {
+        capturedBlob = blob;
+        const previewUrl = URL.createObjectURL(blob);
+        previewImg.src = previewUrl;
+        
+        // Pause video to save resources
+        video.pause();
+        
+        // Switch UI
+        step2.classList.add('hidden');
+        stepPreview.classList.remove('hidden');
+    }, 'image/jpeg', 0.95);
 }
 
 async function registerUser(blob) {
     const formData = new FormData();
     formData.append('photo', blob, 'face.jpg');
     formData.append('invite_code', inviteCode);
-    
-    instruction.innerText = "Processing Registration...";
+
+    // Disable button to prevent double clicks
+    confirmBtn.disabled = true;
+    confirmBtn.innerText = "Processing...";
 
     try {
         const response = await fetch(`${API_URL}/register`, { method: 'POST', body: formData });
         const data = await response.json();
-        
+
         if (response.ok) {
-            document.getElementById('step2').classList.add('hidden');
-            document.getElementById('step3').classList.remove('hidden');
+            stepPreview.classList.add('hidden');
+            step3.classList.remove('hidden');
             if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
         } else {
             throw new Error(data.detail || 'Registration failed');
         }
     } catch (error) {
-        instruction.innerText = "Error. Please reload.";
-        document.getElementById('msg2').innerHTML = `<div class="error">${error.message}</div>`;
-        livenessConfirmed = false;
+        alert(`Registration Error: ${error.message}`);
+        confirmBtn.disabled = false;
+        confirmBtn.innerText = "Register";
     }
 }
