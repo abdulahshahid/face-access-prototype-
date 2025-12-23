@@ -17,28 +17,34 @@ logger = logging.getLogger(__name__)
 qdrant = QdrantClient(url=settings.QDRANT_URL)
 COLLECTION_NAME = "faces"
 
-# Ensure collection exists
+# --- FIXED INITIALIZATION LOGIC ---
+# Check if collection exists, create only if missing.
 try:
     qdrant.get_collection(COLLECTION_NAME)
-except:
-    qdrant.create_collection(
-        collection_name=COLLECTION_NAME,
-        vectors_config=VectorParams(size=128, distance=Distance.COSINE)
-    )
+except Exception:
+    try:
+        qdrant.create_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=VectorParams(size=128, distance=Distance.COSINE)
+        )
+    except Exception as e:
+        # If the error message says "already exists", we can safely ignore it.
+        if "already exists" in str(e) or "Conflict" in str(e):
+            pass 
+        else:
+            # If it's a different error, we still want to crash so we know about it.
+            logger.error(f"Failed to create collection: {e}")
+            raise e
+# ----------------------------------
 
 @router.post("/register")
 async def register_face(
-    invite_code: str = Form(...),  # <--- Read from Form Data
+    invite_code: str = Form(...),
     photo: UploadFile = File(...), 
     db: Session = Depends(get_db)
 ):
     """
     Register a face using an invite code.
-    1. Validate invite code
-    2. Detect face in photo
-    3. Generate embedding
-    4. Save to Qdrant (Vector DB)
-    5. Update status in Postgres
     """
     try:
         # 1. Validate User
@@ -57,10 +63,9 @@ async def register_face(
         if image is None:
             raise HTTPException(status_code=400, detail="Invalid image file")
 
-        # Convert to RGB (dlib expects RGB)
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        # 3. Detect Face & Generate Embedding
+        # 3. Detect Face
         face_locations = face_recognition.face_locations(rgb_image)
         if not face_locations:
             raise HTTPException(status_code=400, detail="No face detected. Please try again.")
@@ -75,12 +80,12 @@ async def register_face(
             
         embedding = face_encodings[0].tolist()
 
-        # 4. Save to Qdrant (Vector DB)
+        # 4. Save to Qdrant
         qdrant.upsert(
             collection_name=COLLECTION_NAME,
             points=[
                 PointStruct(
-                    id=attendee.id,  # Use Postgres ID as Qdrant ID
+                    id=attendee.id,
                     vector=embedding,
                     payload={
                         "name": attendee.name,
@@ -91,7 +96,7 @@ async def register_face(
             ]
         )
 
-        # 5. Update Status in Postgres
+        # 5. Update Status
         attendee.status = "registered"
         db.commit()
 

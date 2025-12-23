@@ -1,118 +1,86 @@
-// 1. FIXED: Use relative path. Nginx handles the routing automatically.
-// This works on localhost, 89.117.49.7, or any domain.
-const API_URL = '/api';
-
-const uploadArea = document.getElementById('uploadArea');
-const fileInput = document.getElementById('fileInput');
-const uploadBtn = document.getElementById('uploadBtn');
-const messageDiv = document.getElementById('message');
-const loadingDiv = document.getElementById('loading');
+const form = document.getElementById('uploadForm');
+const fileInput = document.getElementById('csvFile');
+const statusDiv = document.getElementById('status');
 const resultsDiv = document.getElementById('results');
-const resultsList = document.getElementById('resultsList');
+const codesList = document.getElementById('codesList');
 
-// Drag and drop handlers
-['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-    uploadArea.addEventListener(eventName, preventDefaults, false);
-});
-
-function preventDefaults(e) {
+form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    e.stopPropagation();
-}
-
-uploadArea.addEventListener('dragover', () => uploadArea.classList.add('dragover'));
-uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
-uploadArea.addEventListener('drop', handleDrop);
-uploadArea.addEventListener('click', () => fileInput.click());
-
-fileInput.addEventListener('change', handleFiles);
-
-function handleDrop(e) {
-    uploadArea.classList.remove('dragover');
-    const dt = e.dataTransfer;
-    const files = dt.files;
-    handleFiles({ target: { files: files } });
-}
-
-function handleFiles(e) {
-    const file = e.target.files[0];
-    if (file) {
-        if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
-            showMessage('❌ Please upload a valid CSV file.', 'error');
-            return;
-        }
-        uploadArea.innerHTML = `<p>📄 ${file.name}</p><p style="font-size:12px;color:#666;">Click to change</p>`;
-        uploadBtn.style.display = 'block';
-        uploadBtn.onclick = () => uploadCSV(file);
+    
+    if (!fileInput.files[0]) {
+        showStatus('Please select a file', 'error');
+        return;
     }
-}
-
-async function uploadCSV(file) {
-    loadingDiv.classList.add('show');
-    uploadBtn.disabled = true;
-    messageDiv.innerHTML = '';
-    resultsDiv.classList.remove('show');
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', fileInput.files[0]);
+
+    showStatus('Uploading...', 'processing');
+    resultsDiv.hidden = true;
+    codesList.innerHTML = '';
 
     try {
-        const response = await fetch(`${API_URL}/upload-csv`, {
+        const response = await fetch('/api/upload-csv', {
             method: 'POST',
             body: formData
         });
 
         const data = await response.json();
-        console.log("Server Response:", data); // Debugging line
 
         if (response.ok) {
-            showMessage(`✅ Successfully processed attendees!`, 'success');
-            
-            // 2. FIXED: Handle different response structures safely
-            if (data.results && Array.isArray(data.results)) {
-                displayResults(data.results);
-            } else if (data.invite_codes && Array.isArray(data.invite_codes)) {
-                displayResults(data.invite_codes);
+            // Warn if 0 new people (duplicates), otherwise Success
+            if (data.total_processed === 0) {
+                showStatus('⚠️ Upload successful, but no NEW attendees were added (all duplicates).', 'warning');
             } else {
-                console.warn("Unexpected data structure:", data);
-                showMessage("✅ Upload successful, but no list returned to display.", "success");
+                showStatus(`✅ Success! Generated ${data.total_processed} new invite links.`, 'success');
+                displayLinks(data.results);
+            }
+            
+            // Show errors if any
+            if (data.errors && data.errors.length > 0) {
+                const errorMsg = document.createElement('div');
+                errorMsg.className = 'error-list';
+                errorMsg.innerHTML = '<br><strong>Skipped Rows:</strong><br>' + data.errors.join('<br>');
+                statusDiv.appendChild(errorMsg);
             }
         } else {
-            throw new Error(data.detail || 'Upload failed');
+            showStatus(data.detail || 'Upload failed', 'error');
         }
     } catch (error) {
-        console.error("Upload Error:", error);
-        showMessage(`❌ Error: ${error.message}`, 'error');
-    } finally {
-        loadingDiv.classList.remove('show');
-        uploadBtn.disabled = false;
+        showStatus('Network error: ' + error.message, 'error');
     }
-}
+});
 
-function displayResults(items) {
-    resultsList.innerHTML = '';
+function displayLinks(attendees) {
+    resultsDiv.hidden = false;
     
-    // Safety check before looping
-    if (!items || !Array.isArray(items)) {
-        console.error("displayResults received invalid data:", items);
-        return;
-    }
+    // 1. Get the current website address (e.g. http://89.117.49.7)
+    const baseUrl = window.location.origin;
 
-    items.forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'result-item';
-        div.innerHTML = `
-            <div>
-                <strong>${item.name || 'Unknown'}</strong><br>
-                <small>${item.email || 'No Email'}</small>
+    // 2. Render each invite as a clickable link
+    codesList.innerHTML = attendees.map(a => {
+        const fullLink = `${baseUrl}/register?code=${a.invite_code}`;
+        return `
+        <div class="code-card" style="background: white; padding: 15px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd;">
+            <div class="attendee-info" style="margin-bottom: 8px;">
+                <strong style="font-size: 1.1em;">${a.name}</strong><br>
+                <small style="color: #666;">${a.email}</small>
             </div>
-            <span class="invite-code">${item.invite_code || item.code || 'N/A'}</span>
+            <div class="code-actions" style="display: flex; gap: 10px;">
+                <input type="text" value="${fullLink}" readonly onclick="this.select()" 
+                       style="flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: #f9f9f9;">
+                
+                <a href="${fullLink}" target="_blank" 
+                   style="background: #007bff; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; align-self: center;">
+                   Open 🔗
+                </a>
+            </div>
+        </div>
         `;
-        resultsList.appendChild(div);
-    });
-    resultsDiv.classList.add('show');
+    }).join('');
 }
 
-function showMessage(text, type) {
-    messageDiv.innerHTML = `<div class="${type}">${text}</div>`;
+function showStatus(message, type) {
+    statusDiv.className = `status ${type}`;
+    statusDiv.innerHTML = message;
 }
