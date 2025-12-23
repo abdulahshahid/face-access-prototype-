@@ -8,19 +8,12 @@ sys.path.append('/app')
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 # Now it should be able to find 'db' or 'app.db'
-try:
-    from db.database import get_db
-    from db.models import Attendee
-except ImportError:
-    # Fallback if 'db' is inside 'app'
-    from app.db.database import get_db
-    from app.db.models import Attendee
-
+from db.session import get_db
 from core.security import generate_invite_code
 import csv
 import io
 import logging
-
+from models.attendee import Attendee
 router = APIRouter()
 logger = logging.getLogger(__name__)
 

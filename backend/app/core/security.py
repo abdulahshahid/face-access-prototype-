@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 import jwt
 from core.config import settings
+import secrets
+import string
 
 def generate_registration_code() -> str:
     """Generate unique registration code"""
@@ -46,3 +48,9 @@ def verify_access_token(token: str):
         return payload
     except jwt.PyJWTError:
         return None
+
+
+def generate_invite_code(length: int = 8) -> str:
+    """Generates a secure random alphanumeric invite code."""
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
