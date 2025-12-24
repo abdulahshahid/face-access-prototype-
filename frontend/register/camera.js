@@ -99,7 +99,7 @@ async function detectBlink() {
     if (livenessConfirmed) return;
     if (blinkInterval) clearInterval(blinkInterval); // Ensure no duplicate loops
 
-    instruction.innerText = "Please BLINK to capture photo 📸";
+    instruction.innerText = "Please Look into the camera and blink to capture photo 📸";
 
     const displaySize = { width: video.videoWidth, height: video.videoHeight };
     faceapi.matchDimensions(overlay, displaySize);
