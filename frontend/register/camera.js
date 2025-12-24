@@ -57,7 +57,7 @@ retakeBtn.addEventListener('click', () => {
     isBlinking = false;
     capturedBlob = null;
     
-    instruction.innerText = "Please BLINK to capture photo 📸";
+    instruction.innerText = "Please look into the camera and blink to capture photo 📸";
     instruction.style.color = "#007bff";
     
     video.play();
