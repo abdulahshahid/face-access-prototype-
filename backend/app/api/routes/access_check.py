@@ -54,7 +54,7 @@ async def access_check(photo: UploadFile = File(...)):
         
         return {
             "status": "OK",
-            "message": f"Welcome, {match.payload['name']}!",
+            "message": f"Welcome, {match.payload['email']}!",
             "user": match.payload,
             "confidence": confidence
         }
