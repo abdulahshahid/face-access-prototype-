@@ -1,112 +1,139 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Face Access Control System</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Face Access Control</title>
+
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                Roboto, Helvetica, Arial, sans-serif;
+            background: #f6f7f9;
+            color: #1f2933;
             min-height: 100vh;
             display: flex;
-            justify-content: center;
             align-items: center;
-            padding: 20px;
+            justify-content: center;
+            padding: 24px;
         }
+
         .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            padding: 60px 40px;
-            max-width: 600px;
             width: 100%;
-            text-align: center;
+            max-width: 720px;
+            background: #ffffff;
+            border-radius: 14px;
+            border: 1px solid #e5e7eb;
+            padding: 40px;
         }
+
+        header {
+            margin-bottom: 32px;
+        }
+
         h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 36px;
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
         }
+
         .subtitle {
-            color: #666;
-            margin-bottom: 40px;
-            font-size: 16px;
+            font-size: 15px;
+            color: #6b7280;
         }
+
         .card-grid {
             display: grid;
-            grid-template-columns: 1fr;
-            gap: 20px;
-            margin-top: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 32px;
         }
+
         .card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            border-radius: 15px;
+            display: block;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
             text-decoration: none;
-            transition: transform 0.3s, box-shadow 0.3s;
-            cursor: pointer;
+            color: inherit;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
+
         .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border-color: #c7d2fe;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
         }
-        .card-icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-        }
+
         .card-title {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 6px;
         }
+
         .card-desc {
             font-size: 14px;
-            opacity: 0.9;
+            color: #6b7280;
+            line-height: 1.4;
         }
-        .footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #e0e0e0;
-            color: #999;
-            font-size: 12px;
+
+        footer {
+            margin-top: 32px;
+            padding-top: 16px;
+            border-top: 1px solid #e5e7eb;
+            font-size: 13px;
+            color: #9ca3af;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
         }
     </style>
 </head>
+
 <body>
     <div class="container">
-        <h1>🔐 Face Access Control</h1>
-        <p class="subtitle">Privacy-focused facial recognition system</p>
-        
+        <header>
+            <h1>Face Access Control</h1>
+            <p class="subtitle">
+                Privacy-first facial recognition for secure access management
+            </p>
+        </header>
+
         <div class="card-grid">
             <a href="/organizer" class="card">
-                <div class="card-icon">📋</div>
                 <div class="card-title">Organizer Portal</div>
-                <div class="card-desc">Upload attendee list and generate invite codes</div>
+                <div class="card-desc">
+                    Manage attendees, upload lists, and issue invite codes.
+                </div>
             </a>
-            
+
             <a href="/register" class="card">
-                <div class="card-icon">✨</div>
-                <div class="card-title">Register</div>
-                <div class="card-desc">Register your face using an invite code</div>
+                <div class="card-title">Face Registration</div>
+                <div class="card-desc">
+                    Register your identity securely using an invite code.
+                </div>
             </a>
-            
+
             <a href="/access" class="card">
-                <div class="card-icon">🚪</div>
-                <div class="card-title">Access Check</div>
-                <div class="card-desc">Verify access with face recognition</div>
+                <div class="card-title">Access Verification</div>
+                <div class="card-desc">
+                    Validate access through real-time facial recognition.
+                </div>
             </a>
         </div>
-        
-        <div class="footer">
-            <p>🔒 Privacy-focused • No photos stored • Only embeddings</p>
-        </div>
+
+        <footer>
+            <span>No images stored</span>
+            <span>Embeddings only • Privacy preserved</span>
+        </footer>
     </div>
 </body>
 </html>
