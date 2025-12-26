@@ -9,13 +9,13 @@ from models.attendee import Attendee
 from core.config import settings
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import PointStruct, VectorParams, Distance
+COLLECTION_NAME = settings.QDRANT_COLLECTION
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Initialize Qdrant Client
 qdrant = QdrantClient(url=settings.QDRANT_URL)
-COLLECTION_NAME = "faces"
 
 # --- FIXED INITIALIZATION LOGIC ---
 # Check if collection exists, create only if missing.

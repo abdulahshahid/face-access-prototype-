@@ -5,12 +5,12 @@ import numpy as np
 import logging
 from core.config import settings
 from qdrant_client import QdrantClient
+COLLECTION_NAME = settings.QDRANT_COLLECTION
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 qdrant = QdrantClient(url=settings.QDRANT_URL)
-COLLECTION_NAME = "faces"
 
 @router.post("/access-check")
 async def access_check(photo: UploadFile = File(...)):

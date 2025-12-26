@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     # Qdrant Vector Database
     QDRANT_URL: str = "http://qdrant:6333"
+    QDRANT_COLLECTION: str = "faces"
 
     # Security
     SECRET_KEY: str = "ea03da06bae3cf7a79d92303f6d0f3348ef0fb15f25b2e8183f63aca93f9db7c"
