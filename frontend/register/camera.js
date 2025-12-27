@@ -23,7 +23,6 @@ let isBlinking = false;
 let livenessConfirmed = false;
 let blinkInterval = null; // Store interval to clear it later
 let capturedBlob = null;  // Store the blob for upload
-let brightnessCheckInterval = null; // Store brightness check interval
 
 // --- Check URL for Invite Code on Load ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -59,10 +58,9 @@ retakeBtn.addEventListener('click', () => {
     capturedBlob = null;
     
     instruction.innerText = "Please look into the camera and blink to capture photo 📸";
-    instruction.classList.remove('warning', 'error');
+    instruction.style.color = "#007bff";
     
     video.play();
-    startBrightnessMonitoring(); // Restart brightness monitoring
     detectBlink(); // Restart detection loop
 });
 
@@ -88,7 +86,6 @@ async function startLivenessCheck() {
 
         video.onloadedmetadata = () => {
             video.play();
-            startBrightnessMonitoring(); // Start monitoring brightness
             detectBlink();
         };
 
@@ -102,6 +99,8 @@ async function detectBlink() {
     if (livenessConfirmed) return;
     if (blinkInterval) clearInterval(blinkInterval); // Ensure no duplicate loops
 
+    instruction.innerText = "Please Look into the camera and blink to capture photo 📸";
+
     const displaySize = { width: video.videoWidth, height: video.videoHeight };
     faceapi.matchDimensions(overlay, displaySize);
 
@@ -113,14 +112,6 @@ async function detectBlink() {
         ctx.clearRect(0, 0, overlay.width, overlay.height);
 
         if (detections.length > 0) {
-            const brightness = checkBrightness(video, captureCanvas);
-            
-            // Only allow blink detection if lighting is adequate
-            if (brightness < 50) {
-                // Too dark - brightness monitor will show warning
-                return;
-            }
-            
             const landmarks = detections[0].landmarks;
             const leftEye = landmarks.getLeftEye();
             const rightEye = landmarks.getRightEye();
@@ -131,11 +122,9 @@ async function detectBlink() {
                 if (!isBlinking) {
                     isBlinking = true;
                     instruction.innerText = "Blink Detected! Capturing...";
-                    instruction.classList.remove('warning', 'error');
                     instruction.style.color = "#28a745";
                     livenessConfirmed = true;
                     clearInterval(blinkInterval); // Stop detecting
-                    clearInterval(brightnessCheckInterval); // Stop brightness check
                     
                     // Show Preview instead of registering immediately
                     setTimeout(() => captureAndPreview(), 500);
@@ -157,60 +146,6 @@ function getEAR(eye) {
 
 function dist(p1, p2) {
     return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
-}
-
-// Brightness Detection Function
-function checkBrightness(video, canvas) {
-    const ctx = canvas.getContext('2d');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    let brightnessSum = 0;
-    
-    // Sample every 10th pixel for performance
-    for (let i = 0; i < data.length; i += 40) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        // Calculate perceived brightness (weighted for human perception)
-        brightnessSum += (0.299 * r + 0.587 * g + 0.114 * b);
-    }
-    
-    const avgBrightness = brightnessSum / (data.length / 40);
-    return avgBrightness;
-}
-
-function startBrightnessMonitoring() {
-    if (brightnessCheckInterval) clearInterval(brightnessCheckInterval);
-    
-    brightnessCheckInterval = setInterval(() => {
-        if (livenessConfirmed) {
-            clearInterval(brightnessCheckInterval);
-            return;
-        }
-        
-        const brightness = checkBrightness(video, captureCanvas);
-        
-        // Brightness thresholds
-        const TOO_DARK = 50;  // Adjust based on testing
-        const GOOD_LIGHT = 80; // Minimum acceptable brightness
-        
-        if (brightness < TOO_DARK) {
-            instruction.innerHTML = "⚠️ Too Dark! Please move to a brighter area";
-            instruction.classList.remove('error');
-            instruction.classList.add('warning');
-        } else if (brightness < GOOD_LIGHT) {
-            instruction.innerHTML = "💡 Lighting could be better. Move to brighter area for best results";
-            instruction.classList.remove('error');
-            instruction.classList.add('warning');
-        } else {
-            instruction.innerHTML = "Please look into the camera and blink to capture photo 📸";
-            instruction.classList.remove('warning', 'error');
-        }
-    }, 500); // Check every 500ms
 }
 
 // Replaced captureAndRegister with captureAndPreview
