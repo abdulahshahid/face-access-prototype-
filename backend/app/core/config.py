@@ -16,6 +16,15 @@ class Settings(BaseSettings):
     # Qdrant Vector Database
     QDRANT_URL: str = "http://qdrant:6333"
     QDRANT_COLLECTION: str = "faces"
+    # Face Recognition Settings
+    FACE_MATCH_THRESHOLD: float = 0.7  # 70% similarity (DOT product)
+    FACE_MIN_CONFIDENCE: float = 70.0  # Minimum confidence percentage
+    MIN_SCORE_GAP: float = 0.05  # Minimum gap between top matches
+    
+    # Performance Settings
+    FACE_DETECTION_MODEL: str = "hog"  # "hog" for CPU, "cnn" for GPU
+    NUM_JITTERS: int = 1  # For face encoding
+    UPSAMPLE_TIMES: int = 1  # For face detection
 
     # Security
     SECRET_KEY: str = "ea03da06bae3cf7a79d92303f6d0f3348ef0fb15f25b2e8183f63aca93f9db7c"
