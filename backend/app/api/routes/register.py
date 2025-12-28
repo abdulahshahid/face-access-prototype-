@@ -9,33 +9,34 @@ from models.attendee import Attendee
 from core.config import settings
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import PointStruct, VectorParams, Distance
+
+# Configuration
 COLLECTION_NAME = settings.QDRANT_COLLECTION
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Initialize Qdrant Client
+# Initialize Qdrant
 qdrant = QdrantClient(url=settings.QDRANT_URL)
 
-# --- FIXED INITIALIZATION LOGIC ---
-# Check if collection exists, create only if missing.
+# --- INITIALIZATION BLOCK ---
+# We try to get the collection. If it doesn't exist, we create it with EUCLID distance.
 try:
     qdrant.get_collection(COLLECTION_NAME)
 except Exception:
     try:
         qdrant.create_collection(
             collection_name=COLLECTION_NAME,
-            vectors_config=VectorParams(size=128, distance=Distance.COSINE)
+            # IMPORTANT: Changed to EUCLID to match face_recognition logic
+            vectors_config=VectorParams(size=128, distance=Distance.EUCLID)
         )
+        logger.info(f"Created collection {COLLECTION_NAME} with EUCLID distance.")
     except Exception as e:
-        # If the error message says "already exists", we can safely ignore it.
         if "already exists" in str(e) or "Conflict" in str(e):
             pass 
         else:
-            # If it's a different error, we still want to crash so we know about it.
             logger.error(f"Failed to create collection: {e}")
             raise e
-# ----------------------------------
 
 @router.post("/register")
 async def register_face(
@@ -43,9 +44,6 @@ async def register_face(
     photo: UploadFile = File(...), 
     db: Session = Depends(get_db)
 ):
-    """
-    Register a face using an invite code.
-    """
     try:
         # 1. Validate User
         attendee = db.query(Attendee).filter(Attendee.invite_code == invite_code).first()
@@ -66,7 +64,8 @@ async def register_face(
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
         # 3. Detect Face
-        face_locations = face_recognition.face_locations(rgb_image)
+        # Upsampling 1 time helps find smaller faces
+        face_locations = face_recognition.face_locations(rgb_image, number_of_times_to_upsample=1)
         if not face_locations:
             raise HTTPException(status_code=400, detail="No face detected. Please try again.")
         
@@ -85,7 +84,7 @@ async def register_face(
             collection_name=COLLECTION_NAME,
             points=[
                 PointStruct(
-                    id=attendee.id,
+                    id=attendee.id, 
                     vector=embedding,
                     payload={
                         "name": attendee.name,
@@ -100,7 +99,7 @@ async def register_face(
         attendee.status = "registered"
         db.commit()
 
-        logger.info(f"✅ Successfully registered face for {attendee.name} ({attendee.email})")
+        logger.info(f"✅ Successfully registered {attendee.email}")
 
         return {
             "status": "success",
