@@ -81,15 +81,34 @@ async def access_check(photo: UploadFile = File(...)):
         # 5. Normalize the query vector
         query_vector = normalize_vector(face_encodings[0].tolist())
         
+        # DEBUG: Log vector statistics
+        logger.info(f"🔬 Query vector norm: {np.linalg.norm(np.array(query_vector)):.6f}")
+        logger.info(f"🔬 Vector first 5 values: {query_vector[:5]}")
+        
         # 6. Search in Qdrant with DOT product
+        threshold = getattr(settings, 'FACE_MATCH_THRESHOLD', 0.7)
+        logger.info(f"🔬 Using threshold: {threshold}")
+        
         search_result = qdrant.search(
             collection_name=COLLECTION_NAME,
             query_vector=query_vector,
             limit=3,  # Get top 3 matches for verification
-            score_threshold=getattr(settings, 'FACE_MATCH_THRESHOLD', 0.7),  # Configurable threshold
+            score_threshold=threshold,
             with_payload=True,
             with_vectors=False
         )
+
+        # DEBUG: Log search results
+        logger.info(f"🔬 Number of results returned: {len(search_result)}")
+        if search_result:
+            logger.info(f"🔍 Match found: Score={search_result[0].score:.6f}, Threshold={threshold:.6f}")
+            logger.info(f"🔍 All scores: {[round(r.score, 6) for r in search_result]}")
+            logger.info(f"🔍 Best match user: {search_result[0].payload.get('email')}")
+            logger.info(f"🔍 Score is {'ABOVE' if search_result[0].score >= threshold else 'BELOW'} threshold")
+            
+            # Calculate how much the score exceeds threshold
+            score_diff = search_result[0].score - threshold
+            logger.info(f"🔍 Score difference from threshold: {score_diff:.6f} ({score_diff*100:.2f}%)")
 
         # 7. Process results
         if not search_result:
@@ -106,10 +125,14 @@ async def access_check(photo: UploadFile = File(...)):
         match = search_result[0]
         confidence = match.score * 100  # Convert to percentage
         
+        logger.info(f"🔍 Calculated confidence: {confidence:.2f}%")
+        
         # 8. Secondary verification (ensure clear best match)
         if len(search_result) > 1:
             score_gap = match.score - search_result[1].score
             min_score_gap = getattr(settings, 'MIN_SCORE_GAP', 0.05)
+            
+            logger.info(f"🔍 Score gap between 1st and 2nd: {score_gap:.6f} (min required: {min_score_gap})")
             
             if score_gap < min_score_gap:
                 # Multiple close matches - ambiguous result
@@ -125,6 +148,8 @@ async def access_check(photo: UploadFile = File(...)):
 
         # 9. Check if confidence meets minimum requirement
         min_confidence = getattr(settings, 'FACE_MIN_CONFIDENCE', 70.0)
+        logger.info(f"🔍 Min confidence required: {min_confidence}%, Got: {confidence:.2f}%")
+        
         if confidence < min_confidence:
             processing_time = time.time() - start_time
             logger.info(f"❌ Access denied: Low confidence {confidence:.1f}% for {match.payload.get('email')}")
