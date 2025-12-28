@@ -63,6 +63,7 @@ async function checkAccess(blob) {
 }
 
 function displayResult(data) {
+    console.log(data);
     const isOk = data.status === 'OK';
     const icon = isOk ? '✅' : '❌';
     const className = isOk ? 'ok' : 'no';
