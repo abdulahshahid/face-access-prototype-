@@ -67,10 +67,15 @@ function displayResult(data) {
     const icon = isOk ? '✅' : '❌';
     const className = isOk ? 'ok' : 'no';
     
+    // Only show confidence for successful matches
+    const confidenceHTML = isOk && data.confidence 
+        ? `<div class="confidence">Confidence: ${data.confidence.toFixed(1)}%</div>`
+        : '';
+    
     resultDiv.innerHTML = `
         <div class="result ${className}">
             ${icon} ${data.status}
-            <div class="confidence">Confidence: ${data.confidence?.toFixed(1) || 0}%</div>
+            ${confidenceHTML}
             <div class="info">${data.message}</div>
         </div>
     `;
