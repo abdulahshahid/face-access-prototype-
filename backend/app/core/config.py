@@ -17,9 +17,9 @@ class Settings(BaseSettings):
     QDRANT_URL: str = "http://qdrant:6333"
     QDRANT_COLLECTION: str = "faces"
     # Face Recognition Settings
-    FACE_MATCH_THRESHOLD: float = 0.7  # 70% similarity (DOT product)
-    FACE_MIN_CONFIDENCE: float = 70.0  # Minimum confidence percentage
-    MIN_SCORE_GAP: float = 0.05  # Minimum gap between top matches
+    FACE_MATCH_THRESHOLD = 0.92  # Instead of 0.6
+    FACE_MIN_CONFIDENCE = 92.0    # Instead of 70.0
+    MIN_SCORE_GAP = 0.02          # Instead of 0.05  # Minimum gap between top matches
     
     # Performance Settings
     FACE_DETECTION_MODEL: str = "hog"  # "hog" for CPU, "cnn" for GPU
