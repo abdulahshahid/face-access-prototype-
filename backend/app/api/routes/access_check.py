@@ -98,7 +98,6 @@ async def access_check(photo: UploadFile = File(...)):
             return {
                 "status": "DENIED",
                 "message": "Access Denied: Face not recognized",
-                "confidence": 0,
                 "processing_time": f"{processing_time:.2f}s"
             }
 
@@ -119,7 +118,6 @@ async def access_check(photo: UploadFile = File(...)):
                 return {
                     "status": "DENIED",
                     "message": "Multiple possible matches detected. Please try again.",
-                    "confidence": confidence,
                     "processing_time": f"{processing_time:.2f}s"
                 }
 
@@ -130,8 +128,7 @@ async def access_check(photo: UploadFile = File(...)):
             logger.info(f"❌ Access denied: Low confidence {confidence:.1f}% for {match.payload.get('email')}")
             return {
                 "status": "DENIED",
-                "message": f"Access Denied: Low confidence match ({confidence:.1f}%)",
-                "confidence": confidence,
+                "message": "Access Denied: Face not recognized",
                 "processing_time": f"{processing_time:.2f}s"
             }
 
@@ -158,6 +155,5 @@ async def access_check(photo: UploadFile = File(...)):
         logger.error(f"Access check error: {str(e)}", exc_info=True)
         return {
             "status": "ERROR", 
-            "message": "System error. Please try again.",
-            "confidence": 0
+            "message": "System error. Please try again."
         }
