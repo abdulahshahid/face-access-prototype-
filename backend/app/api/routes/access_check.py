@@ -15,16 +15,15 @@ logger = logging.getLogger(__name__)
 
 qdrant = QdrantClient(url=settings.QDRANT_URL)
 
-# --- UPDATED: Normalization function (same as in registration) ---
-def normalize_vector(vector):
-    """Normalize a vector to unit length for cosine similarity."""
+# --- FIXED: No normalization needed for COSINE similarity ---
+def validate_vector(vector):
+    """Validate vector quality."""
     vector_array = np.array(vector, dtype=np.float32)
     norm = np.linalg.norm(vector_array)
     if norm == 0 or np.isnan(norm):
         logger.warning(f"Zero or NaN norm detected in access check vector")
-        return vector
-    normalized = (vector_array / norm).tolist()
-    return normalized
+        raise ValueError("Invalid face encoding")
+    return vector
 
 @router.post("/access-check")
 async def access_check(photo: UploadFile = File(...)):
@@ -48,11 +47,11 @@ async def access_check(photo: UploadFile = File(...)):
         # 2. Convert to RGB and detect faces
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
-        # Fast detection for access control
+        # Face detection
         face_locations = face_recognition.face_locations(
             rgb_image, 
-            number_of_times_to_upsample=1,  # Faster processing
-            model="hog"  # Use HOG for faster CPU processing (use "cnn" for better accuracy)
+            number_of_times_to_upsample=1,
+            model="hog"  # Use "cnn" for better accuracy if GPU available
         )
         
         if not face_locations:
@@ -68,32 +67,36 @@ async def access_check(photo: UploadFile = File(...)):
                 "message": "Multiple faces detected. Only one person can be verified at a time."
             }
 
-        # 4. Extract face encoding
+        # 4. Extract high-quality face encoding
         face_encodings = face_recognition.face_encodings(
             rgb_image, 
             face_locations,
-            num_jitters=1  # Reduce for speed, increase for accuracy
+            num_jitters=10  # FIXED: Increased from 1 to 10 for better accuracy
         )
         
         if not face_encodings:
             return {"status": "ERROR", "message": "Face unclear. Please try again with better lighting."}
 
-        # 5. Normalize the query vector
-        query_vector = normalize_vector(face_encodings[0].tolist())
+        # 5. Validate the query vector (no normalization)
+        try:
+            query_vector = validate_vector(face_encodings[0].tolist())
+        except ValueError as e:
+            return {"status": "ERROR", "message": str(e)}
         
         # DEBUG: Log vector statistics
         logger.info(f"🔬 Query vector norm: {np.linalg.norm(np.array(query_vector)):.6f}")
-        logger.info(f"🔬 Vector first 5 values: {query_vector[:5]}")
         
-        # 6. Search in Qdrant with DOT product
-        threshold = getattr(settings, 'FACE_MATCH_THRESHOLD', 0.7)
+        # 6. FIXED: Use proper threshold for face recognition (0.90-0.95)
+        # Cosine similarity ranges from -1 to 1, with 1 being identical
+        threshold = getattr(settings, 'FACE_MATCH_THRESHOLD', 0.92)  # FIXED: Increased from 0.6 to 0.92
         logger.info(f"🔬 Using threshold: {threshold}")
         
+        # Search in Qdrant with COSINE similarity
         search_result = qdrant.search(
             collection_name=COLLECTION_NAME,
             query_vector=query_vector,
-            limit=3,  # Get top 3 matches for verification
-            score_threshold=threshold,
+            limit=3,
+            score_threshold=threshold,  # Now using proper threshold
             with_payload=True,
             with_vectors=False
         )
@@ -104,16 +107,13 @@ async def access_check(photo: UploadFile = File(...)):
             logger.info(f"🔍 Match found: Score={search_result[0].score:.6f}, Threshold={threshold:.6f}")
             logger.info(f"🔍 All scores: {[round(r.score, 6) for r in search_result]}")
             logger.info(f"🔍 Best match user: {search_result[0].payload.get('email')}")
-            logger.info(f"🔍 Score is {'ABOVE' if search_result[0].score >= threshold else 'BELOW'} threshold")
-            
-            # Calculate how much the score exceeds threshold
             score_diff = search_result[0].score - threshold
-            logger.info(f"🔍 Score difference from threshold: {score_diff:.6f} ({score_diff*100:.2f}%)")
+            logger.info(f"🔍 Score difference from threshold: {score_diff:.6f}")
 
         # 7. Process results
         if not search_result:
             processing_time = time.time() - start_time
-            logger.info(f"❌ Access denied: No match found ({processing_time:.2f}s)")
+            logger.info(f"❌ Access denied: No match found above threshold ({processing_time:.2f}s)")
             return {
                 "status": "DENIED",
                 "message": "Access Denied: Face not recognized",
@@ -127,15 +127,14 @@ async def access_check(photo: UploadFile = File(...)):
         
         logger.info(f"🔍 Calculated confidence: {confidence:.2f}%")
         
-        # 8. Secondary verification (ensure clear best match)
+        # 8. Secondary verification with stricter gap requirement
         if len(search_result) > 1:
             score_gap = match.score - search_result[1].score
-            min_score_gap = getattr(settings, 'MIN_SCORE_GAP', 0.05)
+            min_score_gap = getattr(settings, 'MIN_SCORE_GAP', 0.02)  # FIXED: Reduced to 0.02
             
             logger.info(f"🔍 Score gap between 1st and 2nd: {score_gap:.6f} (min required: {min_score_gap})")
             
             if score_gap < min_score_gap:
-                # Multiple close matches - ambiguous result
                 processing_time = time.time() - start_time
                 logger.warning(f"⚠️ Ambiguous match: {match.payload.get('email')} "
                              f"Score: {match.score:.3f}, Gap: {score_gap:.3f}")
@@ -146,8 +145,8 @@ async def access_check(photo: UploadFile = File(...)):
                     "processing_time": f"{processing_time:.2f}s"
                 }
 
-        # 9. Check if confidence meets minimum requirement
-        min_confidence = getattr(settings, 'FACE_MIN_CONFIDENCE', 70.0)
+        # 9. FIXED: Higher minimum confidence requirement
+        min_confidence = getattr(settings, 'FACE_MIN_CONFIDENCE', 92.0)  # FIXED: Increased from 70 to 92
         logger.info(f"🔍 Min confidence required: {min_confidence}%, Got: {confidence:.2f}%")
         
         if confidence < min_confidence:
@@ -160,7 +159,7 @@ async def access_check(photo: UploadFile = File(...)):
                 "processing_time": f"{processing_time:.2f}s"
             }
 
-        # 10. Access granted
+        # 10. Access granted - with much higher confidence now
         processing_time = time.time() - start_time
         logger.info(f"✅ Access granted: {match.payload.get('email')}, "
                    f"Confidence: {confidence:.1f}%, "

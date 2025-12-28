@@ -19,18 +19,18 @@ logger = logging.getLogger(__name__)
 # Initialize Qdrant Client
 qdrant = QdrantClient(url=settings.QDRANT_URL)
 
-# --- UPDATED: Normalization function ---
-def normalize_vector(vector):
-    """Normalize a vector to unit length for cosine similarity."""
+# --- FIXED: Use raw embeddings (no normalization needed for COSINE) ---
+def validate_vector(vector):
+    """Validate vector quality without normalization."""
     vector_array = np.array(vector, dtype=np.float32)
     norm = np.linalg.norm(vector_array)
     if norm == 0 or np.isnan(norm):
-        logger.warning(f"Zero or NaN norm detected in vector: {vector_array[:5]}...")
-        return vector
-    normalized = (vector_array / norm).tolist()
-    return normalized
+        logger.error(f"Invalid vector detected: zero or NaN norm")
+        raise ValueError("Invalid face encoding generated")
+    # Just return as-is, Qdrant handles normalization internally for COSINE
+    return vector
 
-# --- UPDATED: Collection initialization with DOT product ---
+# --- FIXED: Collection initialization with COSINE similarity ---
 def initialize_collection():
     """Initialize or recreate the collection with proper configuration."""
     try:
@@ -39,26 +39,24 @@ def initialize_collection():
             collection_info = qdrant.get_collection(COLLECTION_NAME)
             # If collection exists but with wrong distance, recreate it
             if (hasattr(collection_info.config.params.vectors, 'distance') and 
-                collection_info.config.params.vectors.distance != Distance.DOT):
+                collection_info.config.params.vectors.distance != Distance.COSINE):
                 logger.warning(f"Collection exists with wrong distance metric. Recreating...")
                 qdrant.delete_collection(COLLECTION_NAME)
                 raise Exception("Collection needs recreation")
         except Exception:
-            # Collection doesn't exist or needs recreation
             pass
         
-        # Create collection with DOT product
+        # Create collection with COSINE similarity
         qdrant.create_collection(
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(
                 size=128, 
-                distance=Distance.DOT  # Changed from COSINE to DOT
+                distance=Distance.COSINE  # FIXED: Using COSINE instead of DOT
             )
         )
-        logger.info(f"✅ Collection '{COLLECTION_NAME}' created with DOT distance")
+        logger.info(f"✅ Collection '{COLLECTION_NAME}' created with COSINE distance")
         
     except Exception as e:
-        # If the error message says "already exists", we can safely ignore it.
         if "already exists" in str(e) or "Conflict" in str(e):
             logger.info(f"Collection '{COLLECTION_NAME}' already exists")
             pass
@@ -100,37 +98,45 @@ async def register_face(
         # Convert to RGB for face_recognition
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        # 3. Detect Face
-        face_locations = face_recognition.face_locations(rgb_image)
+        # 3. Detect Face with better parameters
+        face_locations = face_recognition.face_locations(
+            rgb_image,
+            number_of_times_to_upsample=1,
+            model="hog"  # Use "cnn" for better accuracy if GPU available
+        )
+        
         if not face_locations:
             raise HTTPException(status_code=400, detail="No face detected. Please try again.")
         
         if len(face_locations) > 1:
             raise HTTPException(status_code=400, detail="Multiple faces detected. Only one person allowed.")
 
-        # Get 128-d face encoding
-        face_encodings = face_recognition.face_encodings(rgb_image, face_locations)
+        # 4. Get high-quality face encoding
+        face_encodings = face_recognition.face_encodings(
+            rgb_image, 
+            face_locations,
+            num_jitters=10  # FIXED: Increased from 1 to 10 for better quality
+        )
+        
         if not face_encodings:
             raise HTTPException(status_code=400, detail="Could not extract features from face.")
             
-        # 4. Normalize the embedding
-        raw_embedding = face_encodings[0].tolist()
-        embedding = normalize_vector(raw_embedding)
+        # 5. Validate the embedding (no normalization needed)
+        embedding = validate_vector(face_encodings[0].tolist())
         
         # Log embedding stats for debugging
-        logger.debug(f"Raw embedding norm: {np.linalg.norm(np.array(raw_embedding)):.4f}")
-        logger.debug(f"Normalized embedding norm: {np.linalg.norm(np.array(embedding)):.4f}")
+        logger.info(f"📊 Embedding norm: {np.linalg.norm(np.array(embedding)):.4f}")
+        logger.info(f"📊 Embedding range: [{min(embedding):.3f}, {max(embedding):.3f}]")
 
-        # 5. Check if this face already exists (optional: prevent duplicate registrations)
+        # 6. Check if this face already exists with HIGHER threshold
         try:
             search_result = qdrant.search(
                 collection_name=COLLECTION_NAME,
                 query_vector=embedding,
                 limit=1,
-                score_threshold=0.8  # High threshold to detect duplicates
+                score_threshold=0.95  # FIXED: Much higher threshold to detect duplicates
             )
             if search_result:
-                # Face already registered with high confidence
                 existing_user = search_result[0].payload
                 if existing_user.get("invite_code") != invite_code:
                     raise HTTPException(
@@ -138,9 +144,9 @@ async def register_face(
                         detail="This face is already registered with another user."
                     )
         except Exception as e:
-            logger.warning(f"Duplicate check failed: {e}")
+            logger.warning(f"Duplicate check warning: {e}")
 
-        # 6. Save to Qdrant
+        # 7. Save to Qdrant
         qdrant.upsert(
             collection_name=COLLECTION_NAME,
             points=[
@@ -158,7 +164,7 @@ async def register_face(
             ]
         )
 
-        # 7. Update Status
+        # 8. Update Status
         attendee.status = "registered"
         db.commit()
 
