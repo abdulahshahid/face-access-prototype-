@@ -616,7 +616,7 @@ async def admin_portal_login():
     </html>
     """)
 
-@router.get("{filename:path}")
+@router.get("/{filename:path}")
 async def admin_portal_static(filename: str):
     """Serve static files for admin portal"""
     if ".." in filename or filename.startswith("/"):
