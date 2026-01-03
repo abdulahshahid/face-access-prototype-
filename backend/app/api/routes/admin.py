@@ -64,9 +64,9 @@ async def admin_root(request: Request):
 @router.get("/attendees", response_model=List[AttendeeResult])
 def get_attendees(
     request: Request,
-    skip: int = 0, 
-    limit: int = 100, 
-    search: Optional[str] = None, 
+    skip: int = 0,
+    limit: int = 100,
+    search: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Get all attendees with pagination"""
