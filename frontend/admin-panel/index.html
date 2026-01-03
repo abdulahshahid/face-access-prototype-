@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Portal - SecureAccess</title>
+    <link rel="stylesheet" href="admin.css">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <div class="logo-icon">🔐</div>
+                <div>
+                    <span class="logo-text">SecureAccess</span>
+                    <span class="logo-subtext">Admin Portal</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="sidebar-menu">
+            <a href="#dashboard" class="menu-item active" data-section="dashboard">
+                <i class="fas fa-chart-bar"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="#attendees" class="menu-item" data-section="attendees">
+                <i class="fas fa-users"></i>
+                <span>Attendees</span>
+            </a>
+            <a href="#upload" class="menu-item" data-section="upload">
+                <i class="fas fa-file-upload"></i>
+                <span>Bulk Upload</span>
+            </a>
+            <a href="#settings" class="menu-item" data-section="settings">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </a>
+        </div>
+        
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <div class="user-avatar">
+                    <i class="fas fa-user-shield"></i>
+                </div>
+                <div>
+                    <span class="user-name" id="adminEmail">admin@example.com</span>
+                    <span class="user-role">Administrator</span>
+                </div>
+            </div>
+            <button id="logoutBtn" class="btn-logout">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </button>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Top Bar -->
+        <header class="topbar">
+            <div class="topbar-left">
+                <h1 id="pageTitle">Dashboard</h1>
+                <p id="pageSubtitle" class="page-subtitle">System overview and analytics</p>
+            </div>
+            <div class="topbar-right">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="globalSearch" placeholder="Search attendees...">
+                </div>
+                <div class="notification-bell">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-count">3</span>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Content Sections -->
+        <div class="content-wrapper">
+            <!-- Dashboard Section -->
+            <section id="dashboardSection" class="content-section active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <h3>Total Attendees</h3>
+                            <i class="fas fa-users stat-icon"></i>
+                        </div>
+                        <div class="stat-value" id="totalAttendees">0</div>
+                        <div class="stat-trend">
+                            <span class="trend-up"><i class="fas fa-arrow-up"></i> 12%</span>
+                            from last week
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <h3>Verified Today</h3>
+                            <i class="fas fa-check-circle stat-icon"></i>
+                        </div>
+                        <div class="stat-value" id="verifiedToday">0</div>
+                        <div class="stat-trend">
+                            <span class="trend-up"><i class="fas fa-arrow-up"></i> 8%</span>
+                            from yesterday
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <h3>Pending Registration</h3>
+                            <i class="fas fa-clock stat-icon"></i>
+                        </div>
+                        <div class="stat-value" id="pendingReg">0</div>
+                        <div class="stat-change">
+                            <button class="btn-small" onclick="loadAttendees()">View All</button>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <h3>System Health</h3>
+                            <i class="fas fa-heartbeat stat-icon"></i>
+                        </div>
+                        <div class="stat-value">
+                            <span class="status-good">Operational</span>
+                        </div>
+                        <div class="stat-trend">
+                            API Latency: <span class="latency-good">142ms</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>Registrations Timeline</h3>
+                        <div class="chart-placeholder">
+                            <canvas id="registrationsChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="chart-card">
+                        <h3>Status Distribution</h3>
+                        <div class="chart-placeholder">
+                            <canvas id="statusChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="recent-activity">
+                    <h3>Recent Activity</h3>
+                    <div class="activity-list">
+                        <div class="activity-item">
+                            <div class="activity-icon success">
+                                <i class="fas fa-user-check"></i>
+                            </div>
+                            <div class="activity-content">
+                                <p><strong>John Doe</strong> successfully entered the venue</p>
+                                <span class="activity-time">2 minutes ago</span>
+                            </div>
+                        </div>
+                        <div class="activity-item">
+                            <div class="activity-icon warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="activity-content">
+                                <p>Failed recognition attempt detected</p>
+                                <span class="activity-time">15 minutes ago</span>
+                            </div>
+                        </div>
+                        <div class="activity-item">
+                            <div class="activity-icon info">
+                                <i class="fas fa-user-plus"></i>
+                            </div>
+                            <div class="activity-content">
+                                <p><strong>Sarah Johnson</strong> registered via invite code</p>
+                                <span class="activity-time">1 hour ago</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Attendees Section -->
+            <section id="attendeesSection" class="content-section">
+                <div class="section-header">
+                    <h2>Attendee Management</h2>
+                    <div class="header-actions">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="attendeeSearch" placeholder="Search by name or email..." 
+                                   onkeyup="searchAttendees()">
+                        </div>
+                        <button class="btn-primary" onclick="loadAttendees()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <button class="btn-secondary" onclick="exportAttendees()">
+                            <i class="fas fa-download"></i> Export CSV
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="filters-bar">
+                    <div class="filter-group">
+                        <label>Status:</label>
+                        <select id="statusFilter" onchange="loadAttendees()">
+                            <option value="">All</option>
+                            <option value="pending">Pending</option>
+                            <option value="registered">Registered</option>
+                            <option value="verified">Verified</option>
+                            <option value="blocked">Blocked</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Sort by:</label>
+                        <select id="sortFilter" onchange="loadAttendees()">
+                            <option value="newest">Newest First</option>
+                            <option value="oldest">Oldest First</option>
+                            <option value="name">Name A-Z</option>
+                            <option value="email">Email</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <table id="attendeesTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Invite Code</th>
+                                <th>Status</th>
+                                <th>Registered</th>
+                                <th>Last Access</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendeesTableBody">
+                            <!-- Data will be loaded here -->
+                            <tr id="loadingRow">
+                                <td colspan="8" style="text-align: center; padding: 40px;">
+                                    <div class="loading-spinner">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        <span>Loading attendees...</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="pagination">
+                    <button id="prevPage" class="btn-pagination" onclick="changePage(-1)" disabled>
+                        <i class="fas fa-chevron-left"></i> Previous
+                    </button>
+                    <div class="page-info">
+                        Page <span id="currentPage">1</span> of <span id="totalPages">1</span>
+                    </div>
+                    <button id="nextPage" class="btn-pagination" onclick="changePage(1)" disabled>
+                        Next <i class="fas fa-chevron-right"></i>
+                    </button>
+                    <div class="page-size">
+                        Show
+                        <select id="pageSize" onchange="changePageSize()">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                        entries
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Bulk Upload Section -->
+            <section id="uploadSection" class="content-section">
+                <div class="upload-container">
+                    <div class="upload-card">
+                        <div class="upload-icon">
+                            <i class="fas fa-file-csv"></i>
+                        </div>
+                        <h2>Bulk Upload Attendees</h2>
+                        <p class="upload-description">
+                            Upload a CSV file with email addresses to bulk create attendee records. 
+                            Each attendee will receive a unique invite code.
+                        </p>
+                        
+                        <div class="upload-area" id="dropArea">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <h3>Drag & Drop CSV File</h3>
+                            <p>or click to browse</p>
+                            <input type="file" id="csvFile" accept=".csv" style="display: none;">
+                            <button class="btn-secondary" onclick="document.getElementById('csvFile').click()">
+                                Browse Files
+                            </button>
+                            <p class="file-requirements">Max file size: 5MB • CSV format only</p>
+                        </div>
+                        
+                        <div class="csv-template">
+                            <h4>CSV Template Format:</h4>
+                            <div class="code-block">
+<pre>email,name
+john@example.com,John Doe
+jane@example.com,Jane Smith
+alex@example.com,Alex Johnson</pre>
+                            </div>
+                            <a href="#" class="btn-small" onclick="downloadTemplate()">
+                                <i class="fas fa-download"></i> Download Template
+                            </a>
+                        </div>
+                        
+                        <div class="upload-progress" id="uploadProgress" style="display: none;">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                            </div>
+                            <div class="progress-text">
+                                <span id="progressText">Uploading...</span>
+                                <span id="progressPercent">0%</span>
+                            </div>
+                        </div>
+                        
+                        <div id="uploadResults" class="upload-results" style="display: none;">
+                            <h4>Upload Results:</h4>
+                            <div class="results-grid">
+                                <div class="result-item success">
+                                    <span class="result-count" id="successCount">0</span>
+                                    <span class="result-label">Successful</span>
+                                </div>
+                                <div class="result-item skipped">
+                                    <span class="result-count" id="skippedCount">0</span>
+                                    <span class="result-label">Skipped</span>
+                                </div>
+                                <div class="result-item error">
+                                    <span class="result-count" id="errorCount">0</span>
+                                    <span class="result-label">Errors</span>
+                                </div>
+                            </div>
+                            <div id="skippedEmails" class="skipped-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Settings Section -->
+            <section id="settingsSection" class="content-section">
+                <div class="settings-container">
+                    <div class="settings-card">
+                        <h2>System Settings</h2>
+                        
+                        <div class="settings-group">
+                            <h3>Face Recognition</h3>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <h4>Recognition Threshold</h4>
+                                    <p>Adjust sensitivity for face matching</p>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="range" id="thresholdSlider" min="0.5" max="0.95" step="0.05" value="0.75">
+                                    <span id="thresholdValue">0.75</span>
+                                </div>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <h4>Maximum Attempts</h4>
+                                    <p>Number of failed attempts before temporary lockout</p>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="number" id="maxAttempts" min="1" max="10" value="3">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-group">
+                            <h3>Security</h3>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <h4>Session Timeout</h4>
+                                    <p>Automatically logout after inactivity</p>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="sessionTimeout">
+                                        <option value="15">15 minutes</option>
+                                        <option value="30" selected>30 minutes</option>
+                                        <option value="60">1 hour</option>
+                                        <option value="120">2 hours</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <h4>Require 2FA for Admin</h4>
+                                    <p>Add an extra layer of security for admin accounts</p>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="switch">
+                                        <input type="checkbox" id="require2FA">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-group">
+                            <h3>Notifications</h3>
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <h4>Email Alerts</h4>
+                                    <p>Receive notifications for system events</p>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="switch">
+                                        <input type="checkbox" id="emailAlerts" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="setting-item">
+                                <div class="setting-info">
+                                    <h4>Failed Attempt Alerts</h4>
+                                    <p>Get notified of multiple failed access attempts</p>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="switch">
+                                        <input type="checkbox" id="failedAttemptAlerts" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-actions">
+                            <button class="btn-primary" onclick="saveSettings()">
+                                <i class="fas fa-save"></i> Save Settings
+                            </button>
+                            <button class="btn-secondary" onclick="resetSettings()">
+                                Reset to Defaults
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+    
+    <!-- Modal for Delete Confirmation -->
+    <div id="deleteModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Confirm Deletion</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong id="deleteUserName">John Doe</strong>?</p>
+                <p class="warning-text">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    This action will permanently remove the attendee from both the database and the face recognition system.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn-danger" id="confirmDeleteBtn">
+                    <i class="fas fa-trash"></i> Delete Permanently
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

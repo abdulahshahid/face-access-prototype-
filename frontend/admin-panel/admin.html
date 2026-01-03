@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - SecureAccess</title>
+    <link rel="stylesheet" href="admin.css">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo">
+                    <div class="logo-icon">🔐</div>
+                    <span>SecureAccess</span>
+                </div>
+                <h1>Admin Portal</h1>
+                <p class="subtitle">Secure access for event organizers</p>
+            </div>
+            
+            <form id="loginForm" class="login-form">
+                <div class="input-group">
+                    <label for="email">Admin Email</label>
+                    <input type="email" id="email" placeholder="admin@example.com" required>
+                </div>
+                
+                <div class="input-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="••••••••" required>
+                </div>
+                
+                <div class="form-footer">
+                    <button type="submit" class="btn-login">
+                        <span class="btn-text">Sign In</span>
+                        <span class="btn-loader" style="display: none;">Loading...</span>
+                    </button>
+                </div>
+                
+                <div id="loginError" class="error-message" style="display: none;"></div>
+            </form>
+            
+            <div class="login-footer">
+                <p class="security-note">
+                    <span>🔒</span> Secure JWT Authentication
+                </p>
+            </div>
+        </div>
+        
+        <div class="demo-credentials" style="display: none;">
+            <p>Demo: Use any credentials (simulated login)</p>
+        </div>
+    </div>
+    
+    <script src="admin.js"></script>
+    <script>
+        // Simple simulated login for demo
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const btn = document.querySelector('.btn-login');
+            const btnText = document.querySelector('.btn-text');
+            const btnLoader = document.querySelector('.btn-loader');
+            const errorDiv = document.getElementById('loginError');
+            
+            // Show loading
+            btnText.style.display = 'none';
+            btnLoader.style.display = 'inline';
+            btn.disabled = true;
+            
+            // Simulate API call delay
+            setTimeout(() => {
+                // For demo purposes, accept any non-empty credentials
+                if (email && password) {
+                    // Store token in localStorage
+                    localStorage.setItem('adminToken', 'demo-jwt-token-' + Date.now());
+                    localStorage.setItem('adminEmail', email);
+                    
+                    // Redirect to main admin portal
+                    window.location.href = 'index.html';
+                } else {
+                    errorDiv.textContent = 'Please enter both email and password';
+                    errorDiv.style.display = 'block';
+                    
+                    btnText.style.display = 'inline';
+                    btnLoader.style.display = 'none';
+                    btn.disabled = false;
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

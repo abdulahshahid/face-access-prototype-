@@ -1,22 +1,8 @@
-// Check for Auth Token immediately
-const adminToken = localStorage.getItem('admin_token');
-
-if (!adminToken) {
-    // If no token, kick them out to login page
-    window.location.href = '/login.html';
-}
-
 const form = document.getElementById('uploadForm');
 const fileInput = document.getElementById('csvFile');
 const statusDiv = document.getElementById('status');
 const resultsDiv = document.getElementById('results');
 const codesList = document.getElementById('codesList');
-
-// Logout Functionality
-document.getElementById('logoutBtn')?.addEventListener('click', () => {
-    localStorage.removeItem('admin_token');
-    window.location.href = '/login.html';
-});
 
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -29,49 +15,36 @@ form.addEventListener('submit', async (e) => {
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
-    showStatus('🔐 Authenticating & Uploading...', 'processing');
+    showStatus('Uploading...', 'processing');
     resultsDiv.hidden = true;
     codesList.innerHTML = '';
 
     try {
-        // IMPORTANT: Point to the secured Admin Endpoint
-        // Assuming your router prefix is /api/admin
-        const response = await fetch('/api/admin/upload-csv', { 
+        const response = await fetch('/api/upload-csv', {
             method: 'POST',
-            headers: {
-                // 🛑 THIS IS THE KEY FIX FOR PHASE 02
-                'Authorization': `Bearer ${adminToken}`
-            },
             body: formData
         });
 
         const data = await response.json();
 
         if (response.ok) {
-            if (data.success_count === 0) {
-                showStatus('⚠️ Upload successful, but all emails were duplicates.', 'warning');
+            // Warn if 0 new people (duplicates), otherwise Success
+            if (data.total_processed === 0) {
+                showStatus('⚠️ Upload successful, but no NEW attendees were added (all duplicates).', 'warning');
             } else {
-                showStatus(`✅ Success! Generated ${data.success_count} new invite links.`, 'success');
-                // Use the data format from our new Pydantic schema
-                // If the backend returns 'results', use that, otherwise refetch list
-                if(data.results) displayLinks(data.results);
-                else fetchLatestAttendees(); // Fallback: fetch list if upload doesn't return full objects
+                showStatus(`✅ Success! Generated ${data.total_processed} new invite links.`, 'success');
+                displayLinks(data.results);
             }
             
-            if (data.skipped_emails && data.skipped_emails.length > 0) {
+            // Show errors if any
+            if (data.errors && data.errors.length > 0) {
                 const errorMsg = document.createElement('div');
                 errorMsg.className = 'error-list';
-                errorMsg.innerHTML = '<br><strong>Skipped (Duplicates):</strong><br>' + data.skipped_emails.join(', ');
+                errorMsg.innerHTML = '<br><strong>Skipped Rows:</strong><br>' + data.errors.join('<br>');
                 statusDiv.appendChild(errorMsg);
             }
         } else {
-            // Handle Auth Errors
-            if (response.status === 401) {
-                showStatus('❌ Session expired. Please login again.', 'error');
-                setTimeout(() => { window.location.href = '/login.html'; }, 2000);
-            } else {
-                showStatus(data.detail || 'Upload failed', 'error');
-            }
+            showStatus(data.detail || 'Upload failed', 'error');
         }
     } catch (error) {
         showStatus('Network error: ' + error.message, 'error');
@@ -80,20 +53,27 @@ form.addEventListener('submit', async (e) => {
 
 function displayLinks(attendees) {
     resultsDiv.hidden = false;
+    
+    // 1. Get the current website address (e.g. http://89.117.49.7)
     const baseUrl = window.location.origin;
 
+    // 2. Render each invite as a clickable link
     codesList.innerHTML = attendees.map(a => {
         const fullLink = `${baseUrl}/register?code=${a.invite_code}`;
         return `
-        <div class="code-card">
-            <div class="code-info">
-                <div class="code-name">${a.name}</div>
-                <div class="code-link">${a.email}</div>
+        <div class="code-card" style="background: white; padding: 15px; margin: 10px 0; border-radius: 8px; border: 1px solid #ddd;">
+            <div class="attendee-info" style="margin-bottom: 8px;">
+                <strong style="font-size: 1.1em;">${a.name}</strong><br>
+                <small style="color: #666;">${a.email}</small>
             </div>
-            <div style="display:flex; gap:10px; align-items:center;">
-                 <input type="text" value="${fullLink}" readonly 
-                        style="background: #222; border: 1px solid #444; color: #fff; padding: 5px; border-radius: 4px; width: 200px;">
-                 <a href="${fullLink}" target="_blank" class="copy-btn" style="text-decoration:none;">Open 🔗</a>
+            <div class="code-actions" style="display: flex; gap: 10px;">
+                <input type="text" value="${fullLink}" readonly onclick="this.select()" 
+                       style="flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: #f9f9f9;">
+                
+                <a href="${fullLink}" target="_blank" 
+                   style="background: #007bff; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; align-self: center;">
+                   Open 🔗
+                </a>
             </div>
         </div>
         `;
@@ -103,15 +83,4 @@ function displayLinks(attendees) {
 function showStatus(message, type) {
     statusDiv.className = `status ${type}`;
     statusDiv.innerHTML = message;
-}
-
-// Optional: Helper to fetch list if upload doesn't return full objects
-async function fetchLatestAttendees() {
-    const response = await fetch('/api/admin/attendees?limit=10', {
-        headers: { 'Authorization': `Bearer ${adminToken}` }
-    });
-    if(response.ok) {
-        const users = await response.json();
-        displayLinks(users);
-    }
 }
