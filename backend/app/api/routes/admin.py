@@ -219,6 +219,482 @@ ADMIN_PORTAL_DIR = BASE_DIR / "admin-portal"
 print(f"Admin Portal Directory: {ADMIN_PORTAL_DIR} {BASE_DIR}")
 ADMIN_PORTAL_DIR.mkdir(exist_ok=True)
 
+@router.get("/portal/upload", response_class=HTMLResponse)
+async def upload_page(request: Request):
+    """Serve the CSV upload page"""
+    is_auth, redirect_response = check_auth_and_redirect(request)
+    if not is_auth and redirect_response:
+        return redirect_response
+    
+    # Return the upload page HTML
+    return HTMLResponse("""
+    <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="public/favicon.svg">
+    <link rel="alternate icon" href="/favicon.ico">
+    <title>Organizer Portal - Upload CSV</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0f;
+            color: #ffffff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        /* Animated gradient background */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 40% 20%, rgba(168, 85, 247, 0.1) 0%, transparent 40%);
+            z-index: 0;
+        }
+        
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 24px;
+        }
+        
+        /* Back button */
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.6);
+            text-decoration: none;
+            font-size: 14px;
+            margin-bottom: 32px;
+            transition: color 0.3s;
+        }
+        
+        .back-link:hover {
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        /* Card */
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 48px 40px;
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            letter-spacing: -0.02em;
+        }
+        
+        .description {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+        
+        /* Upload Area */
+        .upload-area {
+            border: 2px dashed rgba(99, 102, 241, 0.3);
+            background: rgba(99, 102, 241, 0.05);
+            padding: 60px 40px;
+            text-align: center;
+            border-radius: 16px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .upload-area:hover {
+            border-color: rgba(99, 102, 241, 0.5);
+            background: rgba(99, 102, 241, 0.08);
+        }
+        
+        .upload-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+        
+        .upload-text {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .upload-hint {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .file-selected {
+            margin-top: 20px;
+            padding: 12px 20px;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 10px;
+            color: rgba(34, 197, 94, 1);
+            font-size: 14px;
+            display: none;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 24px;
+            transition: all 0.3s;
+            width: 100%;
+            max-width: 300px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* Status Messages */
+        .status {
+            margin-top: 24px;
+            padding: 16px 20px;
+            border-radius: 12px;
+            display: none;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .status.success {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: rgba(34, 197, 94, 1);
+            display: block;
+        }
+        
+        .status.error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: rgba(239, 68, 68, 1);
+            display: block;
+        }
+        
+        .status.warning {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            color: rgba(245, 158, 11, 1);
+            display: block;
+        }
+        
+        .status.processing {
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: rgba(99, 102, 241, 1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(99, 102, 241, 0.3);
+            border-top-color: rgba(99, 102, 241, 1);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Results Section */
+        #results {
+            margin-top: 40px;
+            padding-top: 40px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        #results h3 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 24px;
+            letter-spacing: -0.01em;
+        }
+        
+        .code-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 20px 24px;
+            margin-bottom: 12px;
+            border-radius: 12px;
+            transition: all 0.3s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .code-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+        
+        .code-info {
+            flex: 1;
+        }
+        
+        .code-name {
+            font-weight: 600;
+            margin-bottom: 6px;
+            font-size: 16px;
+        }
+        
+        .code-link {
+            color: rgba(99, 102, 241, 0.8);
+            font-size: 14px;
+            word-break: break-all;
+        }
+        
+        .copy-btn {
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: rgba(99, 102, 241, 1);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s;
+            white-space: nowrap;
+            margin-left: 16px;
+        }
+        
+        .copy-btn:hover {
+            background: rgba(99, 102, 241, 0.2);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 40px 20px;
+            }
+            
+            .card {
+                padding: 32px 24px;
+            }
+            
+            .upload-area {
+                padding: 40px 24px;
+            }
+            
+            h1 {
+                font-size: 28px;
+            }
+            
+            .code-card {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            
+            .copy-btn {
+                margin-left: 0;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    
+    <div class="container">
+        <a href="/api/admin/portal" class="back-link">
+            ← Back to Admin Portal
+        </a>
+        
+        <div class="card">
+            <h1>📋 Bulk Upload CSV</h1>
+            <p class="description">Upload your attendee list (CSV format) to generate secure invite links for each person.</p>
+            
+            <form id="uploadForm">
+                <div class="upload-area" onclick="document.getElementById('csvFile').click()">
+                    <div class="upload-icon">📄</div>
+                    <div class="upload-text">Click to upload CSV file</div>
+                    <div class="upload-hint">or drag and drop your file here</div>
+                    <div class="file-selected" id="fileSelected"></div>
+                </div>
+                <input type="file" id="csvFile" accept=".csv" required>
+                <center>
+                    <button type="submit" class="btn">Generate Invite Links</button>
+                </center>
+            </form>
+            
+            <div id="status"></div>
+            
+            <div id="results" hidden>
+                <h3>Generated Invite Links</h3>
+                <div id="codesList"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Show selected file name
+        document.getElementById('csvFile').addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name;
+            const fileSelected = document.getElementById('fileSelected');
+            if (fileName) {
+                fileSelected.textContent = `Selected: ${fileName}`;
+                fileSelected.style.display = 'block';
+            }
+        });
+        
+        // Prevent default drag behaviors
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.querySelector('.upload-area').addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        // Handle drop
+        document.querySelector('.upload-area').addEventListener('drop', function(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            document.getElementById('csvFile').files = files;
+            
+            const fileName = files[0]?.name;
+            const fileSelected = document.getElementById('fileSelected');
+            if (fileName) {
+                fileSelected.textContent = `Selected: ${fileName}`;
+                fileSelected.style.display = 'block';
+            }
+        });
+        
+        // Form submission
+        const form = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('csvFile');
+        const statusDiv = document.getElementById('status');
+        const resultsDiv = document.getElementById('results');
+        const codesList = document.getElementById('codesList');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!fileInput.files[0]) {
+                showStatus('Please select a file', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            showStatus('Uploading and processing CSV...', 'processing');
+            resultsDiv.hidden = true;
+            codesList.innerHTML = '';
+
+            try {
+                const response = await fetch('/api/admin/upload-csv', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (data.total_processed === 0) {
+                        showStatus('⚠️ Upload successful, but no NEW attendees were added (all duplicates).', 'warning');
+                    } else {
+                        showStatus(`✅ Success! Generated ${data.total_processed} new invite links.`, 'success');
+                        displayLinks(data.results);
+                    }
+                    
+                    if (data.errors && data.errors.length > 0) {
+                        const errorMsg = document.createElement('div');
+                        errorMsg.className = 'error-list';
+                        errorMsg.innerHTML = '<br><strong>Skipped Rows:</strong><br>' + data.errors.join('<br>');
+                        statusDiv.appendChild(errorMsg);
+                    }
+                } else {
+                    showStatus(data.detail || 'Upload failed', 'error');
+                }
+            } catch (error) {
+                showStatus('Network error: ' + error.message, 'error');
+            }
+        });
+
+        function showStatus(message, type) {
+            statusDiv.className = `status ${type}`;
+            statusDiv.innerHTML = message;
+        }
+
+        function displayLinks(attendees) {
+            resultsDiv.hidden = false;
+            const baseUrl = window.location.origin;
+            
+            codesList.innerHTML = attendees.map(a => {
+                const fullLink = `${baseUrl}/register?code=${a.invite_code}`;
+                return `
+                <div class="code-card">
+                    <div class="code-info">
+                        <div class="code-name">${a.name}</div>
+                        <div class="code-link">${fullLink}</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyToClipboard('${fullLink}')">Copy Link</button>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Link copied to clipboard!');
+            });
+        }
+    </script>
+</body>
+</html>
+    """)
+
 @router.get("/portal", response_class=HTMLResponse)
 async def admin_portal(request: Request):
     """Serve the main admin portal page"""
@@ -330,7 +806,7 @@ async def admin_portal(request: Request):
                 <div class="card">
                     <h3>📤 Bulk Upload</h3>
                     <p>Upload CSV files to add multiple attendees at once.</p>
-                    <button class="btn" onclick="showUploadForm()">Upload CSV</button>
+                    <button class="btn" onclick="window.location.href='/api/admin/portal/upload'">Upload CSV</button>
                 </div>
                 
                 <div class="card">
@@ -358,6 +834,8 @@ async def admin_portal(request: Request):
     </body>
     </html>
     """)
+
+
 
 @router.get("/portal/login", response_class=HTMLResponse)
 async def admin_portal_login():
