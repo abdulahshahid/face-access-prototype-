@@ -1144,6 +1144,1026 @@ async def admin_portal_login():
     </body>
     </html>
     """)
+@router.get("/portal/attendees", response_class=HTMLResponse)
+async def attendees_management(request: Request):
+    """Serve the attendees management page"""
+    is_auth, redirect_response = check_auth_and_redirect(request)
+    if not is_auth and redirect_response:
+        return redirect_response
+    
+    return HTMLResponse("""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendees Management - Admin Portal</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0f;
+            color: #ffffff;
+            min-height: 100vh;
+        }
+        
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 40% 20%, rgba(168, 85, 247, 0.1) 0%, transparent 40%);
+            z-index: 0;
+        }
+        
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.6);
+            text-decoration: none;
+            font-size: 14px;
+            margin-bottom: 32px;
+            transition: color 0.3s;
+        }
+        
+        .back-link:hover {
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        
+        h1 {
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        
+        .search-box {
+            display: flex;
+            gap: 10px;
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        .search-box input {
+            flex: 1;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .search-box input:focus {
+            outline: none;
+            border-color: rgba(99, 102, 241, 0.5);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        
+        .search-box button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .search-box button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(99, 102, 241, 0.3);
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 15px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .stat-card h3 {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+        
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #6366f1;
+        }
+        
+        .table-container {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 15px;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        th {
+            padding: 18px 24px;
+            text-align: left;
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.6);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        td {
+            padding: 18px 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        tr:last-child td {
+            border-bottom: none;
+        }
+        
+        tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        
+        .attendee-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .attendee-email {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-pending {
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        
+        .status-registered {
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+        
+        .status-verified {
+            background: rgba(99, 102, 241, 0.15);
+            color: #6366f1;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+        
+        .invite-code {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            word-break: break-all;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .action-btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .delete-btn {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .delete-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .copy-btn {
+            background: rgba(99, 102, 241, 0.1);
+            color: #6366f1;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+        
+        .copy-btn:hover {
+            background: rgba(99, 102, 241, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            margin-top: 32px;
+            padding: 20px;
+        }
+        
+        .pagination button {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .pagination button:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        .pagination button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        
+        .page-info {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(99, 102, 241, 0.3);
+            border-top-color: rgba(99, 102, 241, 1);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 60px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .no-data i {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 16px 24px;
+            border-radius: 12px;
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #22c55e;
+            font-size: 14px;
+            z-index: 1000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+        }
+        
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        .toast.error {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+        
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .modal {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            backdrop-filter: blur(20px);
+            transform: translateY(50px);
+            transition: all 0.3s;
+        }
+        
+        .modal-overlay.show .modal {
+            transform: translateY(0);
+        }
+        
+        .modal h2 {
+            margin-bottom: 16px;
+            color: #ef4444;
+        }
+        
+        .modal p {
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 32px;
+            line-height: 1.6;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        
+        .modal-btn {
+            padding: 12px 24px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .modal-cancel {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .modal-cancel:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .modal-confirm {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .modal-confirm:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 24px 16px;
+            }
+            
+            .header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .search-box {
+                max-width: 100%;
+            }
+            
+            th, td {
+                padding: 12px 16px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .modal {
+                padding: 24px;
+                width: 95%;
+            }
+        }
+        
+        /* Hide table on mobile, show cards instead */
+        @media (max-width: 1024px) {
+            .table-container {
+                display: none;
+            }
+            
+            .mobile-cards {
+                display: block;
+            }
+        }
+        
+        .mobile-cards {
+            display: none;
+        }
+        
+        .mobile-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 16px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .mobile-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+        
+        .mobile-card-info h4 {
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+        
+        .mobile-card-info p {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 8px;
+        }
+        
+        .mobile-card-details {
+            display: grid;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .mobile-detail {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .mobile-detail:last-child {
+            border-bottom: none;
+        }
+        
+        .mobile-detail-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+        }
+        
+        .mobile-detail-value {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .mobile-card-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .mobile-card-actions button {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    
+    <div class="container">
+        <a href="/api/admin/portal" class="back-link">
+            <i class="fas fa-arrow-left"></i>
+            Back to Admin Portal
+        </a>
+        
+        <div class="header">
+            <h1><i class="fas fa-users"></i> Attendees Management</h1>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search by name or email...">
+                <button id="searchBtn">
+                    <i class="fas fa-search"></i> Search
+                </button>
+            </div>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <h3>Total Attendees</h3>
+                <div class="value" id="totalCount">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Pending Registration</h3>
+                <div class="value" id="pendingCount">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Registered</h3>
+                <div class="value" id="registeredCount">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Face Verified</h3>
+                <div class="value" id="verifiedCount">0</div>
+            </div>
+        </div>
+        
+        <!-- Desktop Table -->
+        <div class="table-container">
+            <table id="attendeesTable">
+                <thead>
+                    <tr>
+                        <th>Name & Email</th>
+                        <th>Status</th>
+                        <th>Invite Code</th>
+                        <th>Created Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="attendeesBody">
+                    <tr>
+                        <td colspan="5" class="loading">
+                            <div class="spinner"></div>
+                            <p>Loading attendees...</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Mobile Cards -->
+        <div class="mobile-cards" id="mobileCards"></div>
+        
+        <div class="pagination">
+            <button id="prevBtn" disabled>
+                <i class="fas fa-chevron-left"></i> Previous
+            </button>
+            <span class="page-info">Page <span id="currentPage">1</span></span>
+            <button id="nextBtn" disabled>
+                Next <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal">
+            <h2><i class="fas fa-exclamation-triangle"></i> Delete Attendee</h2>
+            <p id="deleteMessage">Are you sure you want to delete this attendee? This action cannot be undone.</p>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-cancel" id="cancelDelete">Cancel</button>
+                <button class="modal-btn modal-confirm" id="confirmDelete">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+    
+    <script>
+        let currentPage = 1;
+        let currentSearch = '';
+        let currentAttendeeToDelete = null;
+        const limit = 20;
+        
+        // DOM Elements
+        const attendeesBody = document.getElementById('attendeesBody');
+        const mobileCards = document.getElementById('mobileCards');
+        const searchInput = document.getElementById('searchInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const currentPageSpan = document.getElementById('currentPage');
+        const totalCountEl = document.getElementById('totalCount');
+        const pendingCountEl = document.getElementById('pendingCount');
+        const registeredCountEl = document.getElementById('registeredCount');
+        const verifiedCountEl = document.getElementById('verifiedCount');
+        const deleteModal = document.getElementById('deleteModal');
+        const deleteMessage = document.getElementById('deleteMessage');
+        const cancelDeleteBtn = document.getElementById('cancelDelete');
+        const confirmDeleteBtn = document.getElementById('confirmDelete');
+        const toast = document.getElementById('toast');
+        
+        // Load attendees on page load
+        document.addEventListener('DOMContentLoaded', loadAttendees);
+        
+        // Search functionality
+        searchBtn.addEventListener('click', () => {
+            currentSearch = searchInput.value;
+            currentPage = 1;
+            loadAttendees();
+        });
+        
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                currentSearch = searchInput.value;
+                currentPage = 1;
+                loadAttendees();
+            }
+        });
+        
+        // Pagination
+        prevBtn.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                loadAttendees();
+            }
+        });
+        
+        nextBtn.addEventListener('click', () => {
+            currentPage++;
+            loadAttendees();
+        });
+        
+        // Modal handlers
+        cancelDeleteBtn.addEventListener('click', () => {
+            deleteModal.classList.remove('show');
+            currentAttendeeToDelete = null;
+        });
+        
+        confirmDeleteBtn.addEventListener('click', deleteAttendee);
+        
+        // Close modal on overlay click
+        deleteModal.addEventListener('click', (e) => {
+            if (e.target === deleteModal) {
+                deleteModal.classList.remove('show');
+                currentAttendeeToDelete = null;
+            }
+        });
+        
+        async function loadAttendees() {
+            try {
+                // Show loading
+                attendeesBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="loading">
+                            <div class="spinner"></div>
+                            <p>Loading attendees...</p>
+                        </td>
+                    </tr>
+                `;
+                
+                mobileCards.innerHTML = `
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading attendees...</p>
+                    </div>
+                `;
+                
+                // Build query parameters
+                const params = new URLSearchParams({
+                    skip: (currentPage - 1) * limit,
+                    limit: limit.toString()
+                });
+                
+                if (currentSearch) {
+                    params.append('search', currentSearch);
+                }
+                
+                const response = await fetch(`/api/admin/attendees?${params}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const attendees = await response.json();
+                
+                // Update stats
+                updateStats(attendees);
+                
+                // Update pagination
+                updatePagination(attendees.length);
+                
+                // Update table
+                renderAttendeesTable(attendees);
+                
+                // Update mobile cards
+                renderAttendeesCards(attendees);
+                
+            } catch (error) {
+                console.error('Error loading attendees:', error);
+                attendeesBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="no-data">
+                            <i class="fas fa-exclamation-circle"></i>
+                            <p>Error loading attendees. Please try again.</p>
+                        </td>
+                    </tr>
+                `;
+                
+                mobileCards.innerHTML = `
+                    <div class="no-data">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <p>Error loading attendees. Please try again.</p>
+                    </div>
+                `;
+                
+                showToast('Error loading attendees', 'error');
+            }
+        }
+        
+        function updateStats(attendees) {
+            totalCountEl.textContent = attendees.length;
+            
+            const pending = attendees.filter(a => a.status === 'pending').length;
+            const registered = attendees.filter(a => a.status === 'registered').length;
+            const verified = attendees.filter(a => a.status === 'verified').length;
+            
+            pendingCountEl.textContent = pending;
+            registeredCountEl.textContent = registered;
+            verifiedCountEl.textContent = verified;
+        }
+        
+        function updatePagination(itemsCount) {
+            currentPageSpan.textContent = currentPage;
+            
+            // Disable previous button on first page
+            prevBtn.disabled = currentPage === 1;
+            
+            // Disable next button if we have fewer items than limit
+            nextBtn.disabled = itemsCount < limit;
+        }
+        
+        function renderAttendeesTable(attendees) {
+            if (attendees.length === 0) {
+                attendeesBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="no-data">
+                            <i class="fas fa-users-slash"></i>
+                            <p>No attendees found${currentSearch ? ' matching your search' : ''}.</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            const rows = attendees.map(attendee => {
+                const createdDate = new Date(attendee.created_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                const statusClass = getStatusClass(attendee.status);
+                const statusText = getStatusText(attendee.status);
+                const baseUrl = window.location.origin;
+                const inviteLink = `${baseUrl}/register?code=${attendee.invite_code}`;
+                
+                return `
+                    <tr data-id="${attendee.id}">
+                        <td>
+                            <div class="attendee-name">${attendee.name}</div>
+                            <div class="attendee-email">${attendee.email}</div>
+                        </td>
+                        <td>
+                            <span class="status-badge ${statusClass}">${statusText}</span>
+                        </td>
+                        <td>
+                            <div class="invite-code" title="${inviteLink}">
+                                ${attendee.invite_code}
+                            </div>
+                        </td>
+                        <td>${createdDate}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-btn copy-btn" onclick="copyInviteLink('${inviteLink.replace(/'/g, "\\'")}')">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                                <button class="action-btn delete-btn" onclick="showDeleteModal(${attendee.id}, '${attendee.name.replace(/'/g, "\\'")}', '${attendee.email.replace(/'/g, "\\'")}')">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            attendeesBody.innerHTML = rows;
+        }
+        
+        function renderAttendeesCards(attendees) {
+            if (attendees.length === 0) {
+                mobileCards.innerHTML = `
+                    <div class="no-data">
+                        <i class="fas fa-users-slash"></i>
+                        <p>No attendees found${currentSearch ? ' matching your search' : ''}.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const cards = attendees.map(attendee => {
+                const createdDate = new Date(attendee.created_at).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
+                
+                const statusClass = getStatusClass(attendee.status);
+                const statusText = getStatusText(attendee.status);
+                const baseUrl = window.location.origin;
+                const inviteLink = `${baseUrl}/register?code=${attendee.invite_code}`;
+                
+                return `
+                    <div class="mobile-card" data-id="${attendee.id}">
+                        <div class="mobile-card-header">
+                            <div class="mobile-card-info">
+                                <h4>${attendee.name}</h4>
+                                <p>${attendee.email}</p>
+                                <span class="status-badge ${statusClass}">${statusText}</span>
+                            </div>
+                        </div>
+                        <div class="mobile-card-details">
+                            <div class="mobile-detail">
+                                <span class="mobile-detail-label">Invite Code:</span>
+                                <span class="mobile-detail-value invite-code">${attendee.invite_code.substring(0, 8)}...</span>
+                            </div>
+                            <div class="mobile-detail">
+                                <span class="mobile-detail-label">Created:</span>
+                                <span class="mobile-detail-value">${createdDate}</span>
+                            </div>
+                        </div>
+                        <div class="mobile-card-actions">
+                            <button class="action-btn copy-btn" onclick="copyInviteLink('${inviteLink.replace(/'/g, "\\'")}')">
+                                <i class="fas fa-copy"></i> Copy Link
+                            </button>
+                            <button class="action-btn delete-btn" onclick="showDeleteModal(${attendee.id}, '${attendee.name.replace(/'/g, "\\'")}', '${attendee.email.replace(/'/g, "\\'")}')">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            mobileCards.innerHTML = cards;
+        }
+        
+        function getStatusClass(status) {
+            switch (status) {
+                case 'pending': return 'status-pending';
+                case 'registered': return 'status-registered';
+                case 'verified': return 'status-verified';
+                default: return 'status-pending';
+            }
+        }
+        
+        function getStatusText(status) {
+            switch (status) {
+                case 'pending': return 'Pending';
+                case 'registered': return 'Registered';
+                case 'verified': return 'Verified';
+                default: return status;
+            }
+        }
+        
+        function copyInviteLink(link) {
+            navigator.clipboard.writeText(link).then(() => {
+                showToast('Invite link copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                showToast('Failed to copy link', 'error');
+            });
+        }
+        
+        function showDeleteModal(id, name, email) {
+            currentAttendeeToDelete = { id, name, email };
+            deleteMessage.textContent = `Are you sure you want to delete attendee "${name}" (${email})? This action cannot be undone and will also remove their face data if registered.`;
+            deleteModal.classList.add('show');
+        }
+        
+        async function deleteAttendee() {
+            if (!currentAttendeeToDelete) return;
+            
+            const { id, name } = currentAttendeeToDelete;
+            
+            try {
+                confirmDeleteBtn.disabled = true;
+                confirmDeleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+                
+                const response = await fetch(`/api/admin/attendees/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                // Close modal
+                deleteModal.classList.remove('show');
+                
+                // Show success message
+                showToast(result.message || `Attendee "${name}" deleted successfully`);
+                
+                // Reload attendees
+                loadAttendees();
+                
+            } catch (error) {
+                console.error('Error deleting attendee:', error);
+                showToast(`Failed to delete attendee: ${error.message}`, 'error');
+            } finally {
+                confirmDeleteBtn.disabled = false;
+                confirmDeleteBtn.innerHTML = '<i class="fas fa-trash"></i> Delete';
+                currentAttendeeToDelete = null;
+            }
+        }
+        
+        function showToast(message, type = 'success') {
+            toast.textContent = message;
+            toast.className = 'toast';
+            toast.classList.add(type);
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
+    """)
 
 @router.get("/{filename:path}")
 async def admin_portal_static(filename: str):
