@@ -231,6 +231,281 @@ async def upload_csv(
         )
 
 # ==============================================================================
+# LOGIN PAGE
+# ==============================================================================
+
+@router.get("/portal/login", response_class=HTMLResponse)
+async def admin_login_page():
+    """Serve the admin login page"""
+    return HTMLResponse("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Admin Login - Face Access Control</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: #0a0a0f;
+                color: white;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            }
+            .bg-gradient {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.15) 0%, transparent 50%),
+                            radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                            radial-gradient(circle at 40% 20%, rgba(168, 85, 247, 0.1) 0%, transparent 40%);
+                z-index: 0;
+                pointer-events: none;
+            }
+            .login-container {
+                width: 100%;
+                max-width: 400px;
+                background: rgba(255,255,255,0.03);
+                backdrop-filter: blur(10px);
+                border-radius: 24px;
+                padding: 40px;
+                border: 1px solid rgba(255,255,255,0.08);
+                position: relative;
+                z-index: 1;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            }
+            .logo {
+                text-align: center;
+                margin-bottom: 40px;
+            }
+            .logo h1 {
+                font-size: 28px;
+                background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                margin-bottom: 8px;
+            }
+            .logo p {
+                color: rgba(255,255,255,0.6);
+                font-size: 14px;
+            }
+            .form-group {
+                margin-bottom: 25px;
+            }
+            .form-group label {
+                display: block;
+                margin-bottom: 8px;
+                font-size: 14px;
+                font-weight: 500;
+                color: rgba(255,255,255,0.8);
+            }
+            .form-group input {
+                width: 100%;
+                padding: 14px 18px;
+                background: rgba(255,255,255,0.05);
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 12px;
+                color: white;
+                font-size: 15px;
+                transition: all 0.3s;
+            }
+            .form-group input:focus {
+                outline: none;
+                border-color: rgba(99, 102, 241, 0.5);
+                background: rgba(99, 102, 241, 0.05);
+            }
+            .form-group input::placeholder {
+                color: rgba(255,255,255,0.4);
+            }
+            .btn {
+                width: 100%;
+                padding: 16px;
+                background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+                color: white;
+                border: none;
+                border-radius: 12px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.3s;
+                margin-top: 10px;
+            }
+            .btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+            }
+            .btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+                transform: none;
+            }
+            .error-message {
+                background: rgba(239, 68, 68, 0.1);
+                border: 1px solid rgba(239, 68, 68, 0.3);
+                color: rgba(239, 68, 68, 1);
+                padding: 12px 16px;
+                border-radius: 8px;
+                margin-top: 20px;
+                font-size: 14px;
+                display: none;
+            }
+            .success-message {
+                background: rgba(34, 197, 94, 0.1);
+                border: 1px solid rgba(34, 197, 94, 0.3);
+                color: rgba(34, 197, 94, 1);
+                padding: 12px 16px;
+                border-radius: 8px;
+                margin-top: 20px;
+                font-size: 14px;
+                display: none;
+            }
+            .spinner {
+                width: 20px;
+                height: 20px;
+                border: 2px solid rgba(255,255,255,0.3);
+                border-top-color: white;
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+                display: inline-block;
+                vertical-align: middle;
+                margin-right: 10px;
+            }
+            @keyframes spin { to { transform: rotate(360deg); } }
+            .login-info {
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 1px solid rgba(255,255,255,0.08);
+                text-align: center;
+                font-size: 13px;
+                color: rgba(255,255,255,0.5);
+            }
+            .login-info a {
+                color: #6366f1;
+                text-decoration: none;
+            }
+            .login-info a:hover {
+                text-decoration: underline;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="bg-gradient"></div>
+        
+        <div class="login-container">
+            <div class="logo">
+                <h1>🔐 Admin Portal</h1>
+                <p>Face Access Control System</p>
+            </div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="username">Admin Username</label>
+                    <input type="text" id="username" placeholder="Enter admin username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Admin Password</label>
+                    <input type="password" id="password" placeholder="Enter admin password" required>
+                </div>
+                
+                <button type="submit" class="btn" id="loginBtn">
+                    <span id="btnText">Sign In</span>
+                    <div class="spinner" id="spinner" style="display: none;"></div>
+                </button>
+                
+                <div class="error-message" id="errorMessage"></div>
+                <div class="success-message" id="successMessage"></div>
+            </form>
+            
+            <div class="login-info">
+                <p>Contact system administrator for credentials</p>
+            </div>
+        </div>
+        
+        <script>
+            const loginForm = document.getElementById('loginForm');
+            const loginBtn = document.getElementById('loginBtn');
+            const btnText = document.getElementById('btnText');
+            const spinner = document.getElementById('spinner');
+            const errorMessage = document.getElementById('errorMessage');
+            const successMessage = document.getElementById('successMessage');
+            
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                
+                // Show loading state
+                loginBtn.disabled = true;
+                btnText.style.display = 'none';
+                spinner.style.display = 'inline-block';
+                errorMessage.style.display = 'none';
+                successMessage.style.display = 'none';
+                
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            username: username,
+                            password: password
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok && data.access_token) {
+                        // Store token
+                        localStorage.setItem('access_token', data.access_token);
+                        
+                        // Set cookie for server-side auth
+                        document.cookie = `access_token=${data.access_token}; path=/; max-age=86400`; // 1 day
+                        
+                        // Show success message
+                        successMessage.textContent = 'Login successful! Redirecting...';
+                        successMessage.style.display = 'block';
+                        
+                        // Redirect to admin portal
+                        setTimeout(() => {
+                            window.location.href = '/api/admin/portal';
+                        }, 1000);
+                    } else {
+                        throw new Error(data.detail || 'Login failed');
+                    }
+                } catch (error) {
+                    errorMessage.textContent = error.message;
+                    errorMessage.style.display = 'block';
+                } finally {
+                    // Reset button state
+                    loginBtn.disabled = false;
+                    btnText.style.display = 'inline';
+                    spinner.style.display = 'none';
+                }
+            });
+            
+            // Check if already logged in
+            if (localStorage.getItem('access_token')) {
+                window.location.href = '/api/admin/portal';
+            }
+            
+            // Focus on username field
+            document.getElementById('username').focus();
+        </script>
+    </body>
+    </html>
+    """)
+# ==============================================================================
 # ADMIN PORTAL PAGES
 # ==============================================================================
 
