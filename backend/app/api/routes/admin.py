@@ -631,72 +631,68 @@ async def upload_page(request: Request):
         const codesList = document.getElementById('codesList');
 
         form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            if (!fileInput.files[0]) {
-                showStatus('Please select a file', 'error');
-                return;
-            }
+    e.preventDefault();
+    
+    if (!fileInput.files[0]) {
+        showStatus('Please select a file', 'error');
+        return;
+    }
 
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
 
-            showStatus('Uploading...', 'processing');
-            resultsDiv.hidden = true;
-            codesList.innerHTML = '';
+    showStatus('Uploading...', 'processing');
+    resultsDiv.hidden = true;
+    codesList.innerHTML = '';
 
-            try {
-                // ONLY CHANGE: Updated endpoint from /api/upload-csv to /api/admin/upload-csv
-                const response = await fetch('/api/admin/upload-csv', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const data = await response.json();
-                console.log('API Response:', data); // Debug log to see actual structure
-
-                if (response.ok) {
-                    // Warn if 0 new people (duplicates), otherwise Success
-                    // Check both total_processed and success_count
-                    const processedCount = data.total_processed || data.success_count || 0;
-                    
-                    if (processedCount === 0) {
-                        showStatus('⚠️ Upload successful, but no NEW attendees were added (all duplicates).', 'warning');
-                    } else {
-                        showStatus(`✅ Success! Generated ${processedCount} new invite links.`, 'success');
-                        
-                        // Check if we have results to display
-                        if (data.results && Array.isArray(data.results) && data.results.length > 0) {
-                            displayLinks(data.results);
-                        } else if (data.success_count > 0) {
-                            // If API doesn't return results but we know success_count > 0
-                            // Fetch the recently created attendees
-                            fetchRecentAttendees();
-                        }
-                    }
-                    
-                    // Show errors if any - check both errors and skipped_emails
-                    if (data.errors && data.errors.length > 0) {
-                        const errorMsg = document.createElement('div');
-                        errorMsg.className = 'error-list';
-                        errorMsg.innerHTML = '<br><strong>Skipped Rows:</strong><br>' + data.errors.join('<br>');
-                        statusDiv.appendChild(errorMsg);
-                    }
-                    
-                    // Also check for skipped_emails
-                    if (data.skipped_emails && data.skipped_emails.length > 0) {
-                        const skippedMsg = document.createElement('div');
-                        skippedMsg.className = 'error-list';
-                        skippedMsg.innerHTML = '<br><strong>Skipped Duplicates:</strong><br>' + data.skipped_emails.join('<br>');
-                        statusDiv.appendChild(skippedMsg);
-                    }
-                } else {
-                    showStatus(data.detail || 'Upload failed', 'error');
-                }
-            } catch (error) {
-                showStatus('Network error: ' + error.message, 'error');
-            }
+    try {
+        const response = await fetch('/api/admin/upload-csv', {
+            method: 'POST',
+            body: formData
         });
+
+        const data = await response.json();
+        console.log('API Response:', data);
+
+        if (response.ok) {
+            // Check if any new attendees were created
+            if (data.success_count === 0) {
+                showStatus('⚠️ No new attendees added. All emails already exist in the system.', 'warning');
+            } else {
+                showStatus(`✅ Success! Generated ${data.success_count} new invite links.`, 'success');
+                
+                // Display the generated links
+                if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+                    displayLinks(data.results);
+                }
+            }
+            
+            // Show skipped duplicates if any
+            if (data.skipped_emails && data.skipped_emails.length > 0) {
+                const errorMsg = document.createElement('div');
+                errorMsg.className = 'error-list';
+                const skippedCount = data.skipped_emails.length;
+                const skippedList = data.skipped_emails.slice(0, 5).map(email => `• ${email}`).join('<br>');
+                const moreText = skippedCount > 5 ? `<br>... and ${skippedCount - 5} more` : '';
+                errorMsg.innerHTML = `<br><strong>Skipped Duplicates (${skippedCount}):</strong><br>${skippedList}${moreText}`;
+                statusDiv.appendChild(errorMsg);
+            }
+            
+            // Show processing summary
+            const summary = document.createElement('div');
+            summary.style.marginTop = '10px';
+            summary.style.fontSize = '14px';
+            summary.style.color = 'rgba(255, 255, 255, 0.7)';
+            summary.innerHTML = `Processed ${data.total_processed} rows • Created ${data.success_count} new • Skipped ${data.skipped_emails?.length || 0} duplicates`;
+            statusDiv.appendChild(summary);
+            
+        } else {
+            showStatus(data.detail || 'Upload failed', 'error');
+        }
+    } catch (error) {
+        showStatus('Network error: ' + error.message, 'error');
+    }
+});
 
         function displayLinks(attendees) {
             resultsDiv.hidden = false;
