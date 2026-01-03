@@ -3,23 +3,20 @@ import csv
 import logging
 from typing import List, Optional
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, status
-from fastapi.responses import HTMLResponse
-from sqlalchemy.orm import Session
 
-# --- 1. Imports from your Project Structure ---
+# --- FIXED IMPORTS HERE ---
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, status, Request
+from fastapi.responses import HTMLResponse, FileResponse
+from sqlalchemy.orm import Session
+# --------------------------
+
 from db.session import get_db
 from models.attendee import Attendee
-
-# Security & Logic
-from core.deps import get_current_admin  # The JWT Auth Guard
+from core.deps import get_current_admin
 from core.security import generate_invite_code
-from core.qdrant_ops import qdrant_service  # The Vector DB Singleton
-
-# Pydantic Schemas
+from core.qdrant_ops import qdrant_service
 from schemas import AttendeeResponse, BatchUploadResponse
 
-# Initialize Router & Logger
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
