@@ -1,11 +1,16 @@
+# core/security.py
 import hashlib
 import secrets
+import string
 from datetime import datetime, timedelta
 from typing import Optional
+from passlib.context import CryptContext
 import jwt
+from jose import jwt as jose_jwt
 from core.config import settings
-import secrets
-import string
+
+# Password hashing context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def generate_registration_code() -> str:
     """Generate unique registration code"""
@@ -20,39 +25,44 @@ def hash_dni(dni: str) -> str:
     salt = settings.SECRET_KEY[:8]
     return hashlib.sha256(f"{salt}{dni}".encode()).hexdigest()
 
-# core/security.py
-from datetime import datetime, timedelta
-from jose import jwt
-from core.config import settings
-
 def create_access_token(data: dict):
+    """Create JWT access token"""
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
     to_encode.update({"exp": expire})
-
-    return jwt.encode(
+    return jose_jwt.encode(
         to_encode,
         settings.SECRET_KEY,
         algorithm=settings.ALGORITHM
     )
 
-
 def verify_access_token(token: str):
     """Verify JWT access token"""
     try:
-        payload = jwt.decode(
+        payload = jose_jwt.decode(
             token,
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM]
         )
         return payload
-    except jwt.PyJWTError:
+    except jose_jwt.JWTError:
         return None
-
 
 def generate_invite_code(length: int = 8) -> str:
     """Generates a secure random alphanumeric invite code."""
     alphabet = string.ascii_letters + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+# ============================================================================
+# PASSWORD HASHING FUNCTIONS (for admin authentication)
+# ============================================================================
+
+def get_password_hash(password: str) -> str:
+    """Hash a password using bcrypt"""
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash"""
+    return pwd_context.verify(plain_password, hashed_password)
