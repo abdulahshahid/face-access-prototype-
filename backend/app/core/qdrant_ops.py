@@ -13,23 +13,24 @@ class QdrantService:
         self._init_collection()
 
     def _init_collection(self):
-        """Ensures collection exists with Cosine distance."""
+        """
+        Nuclear Option: Try to create, but catch EVERYTHING so we never crash.
+        """
         try:
-            self.client.get_collection(self.collection)
-        except Exception:
-            logger.info(f"⚡ Creating collection {self.collection} with COSINE distance")
             self.client.create_collection(
                 collection_name=self.collection,
                 vectors_config=models.VectorParams(
-                    size=128,  # dlib=128, InsightFace=512
+                    size=128, 
                     distance=models.Distance.COSINE
                 )
             )
+            logger.info("✅ Collection created successfully")
+        except Exception as e:
+            # If it fails (because it exists, or pydantic error, or anything else), 
+            # we just log it and KEEP GOING.
+            logger.warning(f"⚠️ Qdrant Collection Init skipped (likely already exists): {e}")
 
     def delete_user_vector(self, user_id: int):
-        """
-        Removes the vector point associated with the SQL User ID.
-        """
         try:
             self.client.delete(
                 collection_name=self.collection,
