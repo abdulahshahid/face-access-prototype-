@@ -27,22 +27,34 @@ def check_auth_and_redirect(request: Request):
     auth_header = request.headers.get("Authorization")
     token = None
     
+    # Debug logging
+    logger.info(f"Auth check for path: {request.url.path}")
+    logger.info(f"Authorization header: {auth_header}")
+    logger.info(f"Cookies: {request.cookies}")
+    
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header[7:]
     
     # Also check cookies
     if not token:
         token = request.cookies.get("access_token")
+        logger.info(f"Token from cookies: {token}")
     
     if token:
         try:
+            logger.info(f"Verifying token: {token[:20]}...")
             payload = verify_access_token(token)
+            logger.info(f"Token payload: {payload}")
             if payload:
+                logger.info(f"✅ User authenticated: {payload.get('sub')}")
                 return True, None
+            else:
+                logger.warning("❌ Token verification returned None payload")
         except Exception as e:
-            logger.warning(f"Token verification failed: {e}")
+            logger.warning(f"❌ Token verification failed: {e}")
     
-    # Not authenticated - check if this is an API request or HTML request
+    # Not authenticated
+    logger.warning("❌ User not authenticated")
     accept_header = request.headers.get("Accept", "")
     if "text/html" in accept_header or request.url.path.endswith("/portal"):
         return False, RedirectResponse(url="/api/admin/portal/login")
@@ -494,9 +506,7 @@ async def admin_portal_login():
                 <button type="submit" id="loginBtn">Login</button>
             </form>
             
-            <p class="note">
-                Use credentials from .env file (ADMIN_EMAIL and ADMIN_PASSWORD)
-            </p>
+            
         </div>
         
         <script>
