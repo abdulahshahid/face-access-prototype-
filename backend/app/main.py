@@ -4,21 +4,18 @@ import os
 # Add /app to Python path
 sys.path.insert(0, '/app')
 
-from fastapi import FastAPI, Depends  # <--- ADDED Depends
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 import uvicorn
 from sqlalchemy import text
 
-# --- CHANGED IMPORTS ---
-# 1. Removed 'upload_csv' (it's now inside admin)
-# 2. Added 'admin' and 'auth'
 from api.routes import health, register, access_check, invite, admin, auth
 from db.session import SessionLocal, engine
 from db.base import Base
 from core.logging import setup_logging
-from core.deps import get_current_admin # <--- ADDED Security Dependency
+from core.deps import get_current_admin
 
 # Setup logging
 setup_logging()
@@ -70,18 +67,19 @@ app.add_middleware(
 
 # --- PUBLIC ROUTERS ---
 app.include_router(health.router, prefix="/api", tags=["Health"])
-app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"]) # <--- NEW: Login
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(invite.router, prefix="/api", tags=["Invitation"])
 app.include_router(register.router, prefix="/api", tags=["Registration"])
 app.include_router(access_check.router, prefix="/api", tags=["Access Check"])
 
-# --- PROTECTED ADMIN ROUTERS ---
-# This locks ALL routes inside admin.py (Upload CSV, Delete User, List Users)
+# --- ADMIN ROUTERS (NO GLOBAL PROTECTION) ---
+# Protection is handled individually in each route using check_auth_and_redirect()
 app.include_router(
     admin.router, 
     prefix="/api/admin", 
-    tags=["Admin Control"],
-    dependencies=[Depends(get_current_admin)]  # <--- SECURITY LOCK 🔒
+    tags=["Admin Control"]
+    # ❌ REMOVED: dependencies=[Depends(get_current_admin)]
+    # ✅ Each route in admin.py now handles its own auth
 )
 
 @app.get("/")
@@ -94,11 +92,14 @@ async def root():
         "endpoints": {
             "health": "/api/health",
             "auth": "/api/auth/login",
+            "admin_portal": "/api/admin/portal",
+            "admin_login": "/api/admin/portal/login",
             "admin_upload": "/api/admin/upload-csv (Protected)",
             "admin_list": "/api/admin/attendees (Protected)",
             "register": "/api/register",
             "access_check": "/api/access-check"
-        }
+        },
+        "instructions": "Login at /api/admin/portal/login to access admin features"
     }
 
 if __name__ == "__main__":
