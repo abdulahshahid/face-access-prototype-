@@ -633,7 +633,7 @@ async def upload_page(request: Request):
     codesList.innerHTML = '';
 
     try {
-        const response = await fetch('/api/upload-csv', {
+        const response = await fetch('/api/admin/upload-csv', {
             method: 'POST',
             body: formData
         });
