@@ -13,7 +13,7 @@ from models.attendee import Attendee
 from core.deps import get_current_admin
 from core.security import generate_invite_code, verify_access_token
 from core.qdrant_ops import qdrant_service
-from schemas import AttendeeResponse, BatchUploadResponse
+from schemas import AttendeeResult, BatchUploadResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

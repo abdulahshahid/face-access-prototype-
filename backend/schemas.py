@@ -18,4 +18,4 @@ class BatchUploadResponse(BaseModel):
     total_processed: int
     success_count: int
     skipped_emails: List[str]
-    results: List[AttendeeResult]  # Add this line
+    results: List[AttendeeResult]  # Add th
