@@ -9,17 +9,13 @@ class AttendeeBase(BaseModel):
 class AttendeeCreate(AttendeeBase):
     pass
 
-class AttendeeResponse(AttendeeBase):
-    id: int
+class AttendeeResult(BaseModel):
+    name: str
+    email: str
     invite_code: str
-    status: str  # pending, registered, blocked
-    # created_at might be None if the DB field is nullable or missing
-    created_at: Optional[datetime] = None
-
-    # This tells Pydantic to read data from SQLAlchemy models
-    model_config = ConfigDict(from_attributes=True)
 
 class BatchUploadResponse(BaseModel):
     total_processed: int
     success_count: int
     skipped_emails: List[str]
+    results: List[AttendeeResult]  # Add this line

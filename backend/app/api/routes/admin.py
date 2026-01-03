@@ -168,6 +168,7 @@ async def upload_csv(
 
     new_attendees = []
     skipped_emails = []
+    results = []  # Add this to store created attendee data
     
     for row in csv_reader:
         clean_row = {k.lower().strip(): v.strip() for k, v in row.items() if k}
@@ -192,15 +193,24 @@ async def upload_csv(
         )
         db.add(attendee)
         new_attendees.append(attendee)
+        
+        # Store the attendee data for response
+        results.append({
+            "name": name,
+            "email": email,
+            "invite_code": invite_code
+        })
 
     try:
         db.commit()
         logger.info(f"✅ [Admin] Batch Import: {len(new_attendees)} created, {len(skipped_emails)} skipped")
         
+        # Return the results array so frontend can display links
         return {
             "total_processed": len(new_attendees) + len(skipped_emails), 
             "success_count": len(new_attendees),
-            "skipped_emails": skipped_emails
+            "skipped_emails": skipped_emails,
+            "results": results  # CRITICAL: Add this line
         }
     except Exception as e:
         db.rollback()
