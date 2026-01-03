@@ -20,22 +20,24 @@ def hash_dni(dni: str) -> str:
     salt = settings.SECRET_KEY[:8]
     return hashlib.sha256(f"{salt}{dni}".encode()).hexdigest()
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    """Create JWT access token (for organizer/admin if needed)"""
+# core/security.py
+from datetime import datetime, timedelta
+from jose import jwt
+from core.config import settings
+
+def create_access_token(data: dict):
     to_encode = data.copy()
-    
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(hours=24)
-    
+    expire = datetime.utcnow() + timedelta(
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    )
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(
+
+    return jwt.encode(
         to_encode,
         settings.SECRET_KEY,
         algorithm=settings.ALGORITHM
     )
-    return encoded_jwt
+
 
 def verify_access_token(token: str):
     """Verify JWT access token"""

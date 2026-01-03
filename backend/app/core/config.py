@@ -30,7 +30,9 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "ea03da06bae3cf7a79d92303f6d0f3348ef0fb15f25b2e8183f63aca93f9db7c"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ADMIN_USER: str
+    ADMIN_PASSWORD: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     
     # File Upload
     MAX_UPLOAD_SIZE_MB: int = 10
