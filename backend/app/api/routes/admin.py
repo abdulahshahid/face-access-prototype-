@@ -460,54 +460,59 @@ async def upload_page(request: Request):
         }
         
         .code-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 20px 24px;
-            margin-bottom: 12px;
-            border-radius: 12px;
-            transition: all 0.3s;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .code-card:hover {
-            background: rgba(255, 255, 255, 0.06);
-            border-color: rgba(99, 102, 241, 0.3);
-        }
-        
-        .code-info {
-            flex: 1;
-        }
-        
-        .code-name {
-            font-weight: 600;
-            margin-bottom: 6px;
-            font-size: 16px;
-        }
-        
-        .code-link {
-            color: rgba(99, 102, 241, 0.8);
-            font-size: 14px;
-            word-break: break-all;
-        }
-        
-        .copy-btn {
-            background: rgba(99, 102, 241, 0.1);
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            color: rgba(99, 102, 241, 1);
-            padding: 8px 16px;
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
             border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-            transition: all 0.3s;
-            white-space: nowrap;
-            margin-left: 16px;
+            border: 1px solid #ddd;
         }
         
-        .copy-btn:hover {
-            background: rgba(99, 102, 241, 0.2);
+        .attendee-info {
+            margin-bottom: 8px;
+        }
+        
+        .attendee-info strong {
+            font-size: 1.1em;
+            color: #333;
+        }
+        
+        .attendee-info small {
+            color: #666;
+        }
+        
+        .code-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .code-actions input[type="text"] {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #f9f9f9;
+            color: #333;
+        }
+        
+        .code-actions a {
+            background: #007bff;
+            color: white;
+            padding: 8px 15px;
+            text-decoration: none;
+            border-radius: 4px;
+            align-self: center;
+        }
+        
+        .code-actions a:hover {
+            background: #0056b3;
+        }
+        
+        .error-list {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 8px;
+            color: #ef4444;
         }
         
         /* Responsive */
@@ -528,15 +533,13 @@ async def upload_page(request: Request):
                 font-size: 28px;
             }
             
-            .code-card {
+            .code-actions {
                 flex-direction: column;
-                align-items: flex-start;
-                gap: 12px;
             }
             
-            .copy-btn {
-                margin-left: 0;
+            .code-actions a {
                 width: 100%;
+                text-align: center;
             }
         }
     </style>
@@ -610,7 +613,7 @@ async def upload_page(request: Request):
             }
         });
         
-        // Form submission
+        // Your existing JavaScript logic
         const form = document.getElementById('uploadForm');
         const fileInput = document.getElementById('csvFile');
         const statusDiv = document.getElementById('status');
@@ -618,79 +621,89 @@ async def upload_page(request: Request):
         const codesList = document.getElementById('codesList');
 
         form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    if (!fileInput.files[0]) {
-        showStatus('Please select a file', 'error');
-        return;
-    }
+            e.preventDefault();
+            
+            if (!fileInput.files[0]) {
+                showStatus('Please select a file', 'error');
+                return;
+            }
 
-    const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
 
-    showStatus('Uploading...', 'processing');
-    resultsDiv.hidden = true;
-    codesList.innerHTML = '';
+            showStatus('Uploading...', 'processing');
+            resultsDiv.hidden = true;
+            codesList.innerHTML = '';
 
-    try {
-        const response = await fetch('/api/admin/upload-csv', {
-            method: 'POST',
-            body: formData
+            try {
+                // IMPORTANT: Update this endpoint to match your backend
+                const response = await fetch('/api/admin/upload-csv', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Warn if 0 new people (duplicates), otherwise Success
+                    if (data.total_processed === 0) {
+                        showStatus('⚠️ Upload successful, but no NEW attendees were added (all duplicates).', 'warning');
+                    } else {
+                        showStatus(`✅ Success! Generated ${data.total_processed} new invite links.`, 'success');
+                        displayLinks(data.results);
+                    }
+                    
+                    // Show errors if any
+                    if (data.errors && data.errors.length > 0) {
+                        const errorMsg = document.createElement('div');
+                        errorMsg.className = 'error-list';
+                        errorMsg.innerHTML = '<br><strong>Skipped Rows:</strong><br>' + data.errors.join('<br>');
+                        statusDiv.appendChild(errorMsg);
+                    }
+                } else {
+                    showStatus(data.detail || 'Upload failed', 'error');
+                }
+            } catch (error) {
+                showStatus('Network error: ' + error.message, 'error');
+            }
         });
 
-        const data = await response.json();
-
-        if (response.ok) {
-            // Warn if 0 new people (duplicates), otherwise Success
-            if (data.total_processed === 0) {
-                showStatus('⚠️ Upload successful, but no NEW attendees were added (all duplicates).', 'warning');
-            } else {
-                showStatus(`✅ Success! Generated ${data.total_processed} new invite links.`, 'success');
-                displayLinks(data.results);
-            }
-            
-            // Show errors if any
-            if (data.errors && data.errors.length > 0) {
-                const errorMsg = document.createElement('div');
-                errorMsg.className = 'error-list';
-                errorMsg.innerHTML = '<br><strong>Skipped Rows:</strong><br>' + data.errors.join('<br>');
-                statusDiv.appendChild(errorMsg);
-            }
-        } else {
-            showStatus(data.detail || 'Upload failed', 'error');
-        }
-    } catch (error) {
-        showStatus('Network error: ' + error.message, 'error');
-    }
-});
-
-        function showStatus(message, type) {
-            statusDiv.className = `status ${type}`;
-            statusDiv.innerHTML = message;
-        }
-
         function displayLinks(attendees) {
-            resultsDiv.hidden = false;
-            const baseUrl = window.location.origin;
+            if (!attendees || !Array.isArray(attendees)) {
+                console.error('Invalid attendees data:', attendees);
+                return;
+            }
             
+            resultsDiv.hidden = false;
+            
+            // Get the current website address
+            const baseUrl = window.location.origin;
+
+            // Render each invite as a clickable link
             codesList.innerHTML = attendees.map(a => {
                 const fullLink = `${baseUrl}/register?code=${a.invite_code}`;
                 return `
                 <div class="code-card">
-                    <div class="code-info">
-                        <div class="code-name">${a.name}</div>
-                        <div class="code-link">${fullLink}</div>
+                    <div class="attendee-info">
+                        <strong>${a.name}</strong><br>
+                        <small>${a.email}</small>
                     </div>
-                    <button class="copy-btn" onclick="copyToClipboard('${fullLink}')">Copy Link</button>
+                    <div class="code-actions">
+                        <input type="text" value="${fullLink}" readonly onclick="this.select()">
+                        <a href="${fullLink}" target="_blank">
+                            Open 🔗
+                        </a>
+                    </div>
                 </div>
                 `;
             }).join('');
         }
 
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(() => {
-                alert('Link copied to clipboard!');
-            });
+        function showStatus(message, type) {
+            statusDiv.className = `status ${type}`;
+            statusDiv.innerHTML = type === 'processing' ? 
+                `<div class="spinner"></div>${message}` : 
+                message;
         }
     </script>
 </body>
