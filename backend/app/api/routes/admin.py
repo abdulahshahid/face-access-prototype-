@@ -4,17 +4,14 @@ import logging
 from typing import List, Optional
 from pathlib import Path
 
-# --- FIXED IMPORTS HERE ---
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, status, Request
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
-from fastapi.responses import RedirectResponse
-# --------------------------
 
 from db.session import get_db
 from models.attendee import Attendee
 from core.deps import get_current_admin
-from core.security import generate_invite_code
+from core.security import generate_invite_code, verify_access_token
 from core.qdrant_ops import qdrant_service
 from schemas import AttendeeResponse, BatchUploadResponse
 
@@ -22,10 +19,8 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # ==============================================================================
-# 1. LIST ATTENDEES (With Search & Pagination)
+# AUTH HELPER
 # ==============================================================================
-
-from core.security import verify_access_token
 
 def check_auth_and_redirect(request: Request):
     """Check if user is authenticated, return (is_authenticated, redirect_response_or_none)"""
@@ -43,66 +38,65 @@ def check_auth_and_redirect(request: Request):
         try:
             payload = verify_access_token(token)
             if payload:
-                return True, None  # Authenticated, no redirect needed
-        except:
-            pass
+                return True, None
+        except Exception as e:
+            logger.warning(f"Token verification failed: {e}")
     
     # Not authenticated - check if this is an API request or HTML request
     accept_header = request.headers.get("Accept", "")
     if "text/html" in accept_header or request.url.path.endswith("/portal"):
-        # HTML request - redirect to login
         return False, RedirectResponse(url="/api/admin/portal/login")
     else:
-        # API request - return 401
-        return False, None
+        return False, JSONResponse(
+            status_code=401,
+            content={"detail": "Not authenticated"}
+        )
+
+# ==============================================================================
+# ROUTES
+# ==============================================================================
+
 @router.get("/")
 async def admin_root(request: Request):
     """Redirect to portal"""
     return RedirectResponse(url="/api/admin/portal")
 
-@router.get(
-    "/attendees", 
-    response_model=List[AttendeeResponse], 
-)
+@router.get("/attendees", response_model=List[AttendeeResponse])
 def get_attendees(
+    request: Request,
     skip: int = 0, 
     limit: int = 100, 
     search: Optional[str] = None, 
     db: Session = Depends(get_db)
 ):
-    """
-    Get all attendees with pagination.
-    Optional: ?search=john to filter by name or email.
-    """
+    """Get all attendees with pagination"""
+    is_auth, redirect_response = check_auth_and_redirect(request)
+    if not is_auth:
+        return redirect_response
+    
     query = db.query(Attendee)
     
     if search:
-        # Case-insensitive search for Name OR Email
         search_fmt = f"%{search}%"
         query = query.filter(
             (Attendee.email.ilike(search_fmt)) | 
             (Attendee.name.ilike(search_fmt))
         )
     
-    # Sort by creation date (newest first is better for admins)
     users = query.order_by(Attendee.created_at.desc()).offset(skip).limit(limit).all()
-    
     return users
 
-
-# ==============================================================================
-# 2. DELETE ATTENDEE (Strict Consistency: SQL + Vector DB)
-# ==============================================================================
-@router.delete(
-    "/attendees/{user_id}", 
-)
-def delete_attendee(user_id: int, db: Session = Depends(get_db)):
-    """
-    Hard Delete:
-    1. Removes vector from Qdrant (prevent face access).
-    2. Removes record from PostgreSQL.
-    """
-    # Step A: Check if user exists in SQL
+@router.delete("/attendees/{user_id}")
+def delete_attendee(
+    request: Request,
+    user_id: int, 
+    db: Session = Depends(get_db)
+):
+    """Hard Delete user from SQL and Vector DB"""
+    is_auth, redirect_response = check_auth_and_redirect(request)
+    if not is_auth:
+        return redirect_response
+    
     user = db.query(Attendee).filter(Attendee.id == user_id).first()
     if not user:
         raise HTTPException(
@@ -110,26 +104,21 @@ def delete_attendee(user_id: int, db: Session = Depends(get_db)):
             detail=f"User with ID {user_id} not found"
         )
     
-    email_backup = user.email # Keep for logging
+    email_backup = user.email
     
-    # Step B: Delete from Vector DB (Qdrant)
-    # We prioritize this to ensure security (access revocation)
     vector_deleted = False
     try:
         vector_deleted = qdrant_service.delete_user_vector(user_id)
         if not vector_deleted:
-             logger.warning(f"⚠️ Vector deletion returned False for user {user_id}. Vector might not have existed.")
+             logger.warning(f"⚠️ Vector deletion returned False for user {user_id}")
     except Exception as e:
-        # We generally continue to delete the SQL user even if Qdrant fails, 
-        # but we log it as a CRITICAL sync error.
         logger.error(f"❌ CRITICAL: Failed to delete vector for {user_id}: {e}")
 
-    # Step C: Delete from Relational DB (Postgres)
     try:
         db.delete(user)
         db.commit()
         
-        logger.info(f"🗑️ [Admin] Deleted user {user_id} ({email_backup}). Vector Removed: {vector_deleted}")
+        logger.info(f"🗑️ [Admin] Deleted user {user_id} ({email_backup})")
         
         return {
             "status": "success", 
@@ -145,31 +134,23 @@ def delete_attendee(user_id: int, db: Session = Depends(get_db)):
             detail="Internal Database Error during deletion."
         )
 
-
-# ==============================================================================
-# 3. BATCH CSV UPLOAD
-# ==============================================================================
-@router.post(
-    "/upload-csv", 
-    response_model=BatchUploadResponse, 
-)
+@router.post("/upload-csv", response_model=BatchUploadResponse)
 async def upload_csv(
+    request: Request,
     file: UploadFile = File(...), 
     db: Session = Depends(get_db)
 ):
-    """
-    Bulk import users.
-    Required CSV Header: 'email'
-    Optional CSV Header: 'name'
-    """
-    # 1. Validate File Type
+    """Bulk import users via CSV"""
+    is_auth, redirect_response = check_auth_and_redirect(request)
+    if not is_auth:
+        return redirect_response
+    
     if not file.filename.lower().endswith('.csv'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail="Invalid file format. Please upload a .csv file."
         )
 
-    # 2. Read File
     try:
         content = await file.read()
         decoded_content = content.decode('utf-8')
@@ -178,7 +159,6 @@ async def upload_csv(
         logger.error(f"CSV Reading Error: {e}")
         raise HTTPException(status_code=400, detail="Could not read or decode CSV file.")
     
-    # 3. Validate Headers
     headers = [h.lower().strip() for h in csv_reader.fieldnames or []]
     if 'email' not in headers:
          raise HTTPException(
@@ -189,7 +169,6 @@ async def upload_csv(
     new_attendees = []
     skipped_emails = []
     
-    # 4. Process Rows
     for row in csv_reader:
         clean_row = {k.lower().strip(): v.strip() for k, v in row.items() if k}
         
@@ -199,13 +178,11 @@ async def upload_csv(
         if not email:
             continue
 
-        # Check for existing user (SQL only is sufficient for this check)
         existing = db.query(Attendee).filter(Attendee.email == email).first()
         if existing:
             skipped_emails.append(email)
             continue
 
-        # Create new record
         invite_code = generate_invite_code()
         attendee = Attendee(
             name=name,
@@ -216,10 +193,9 @@ async def upload_csv(
         db.add(attendee)
         new_attendees.append(attendee)
 
-    # 5. Commit Transaction
     try:
         db.commit()
-        logger.info(f"✅ [Admin] Batch Import: {len(new_attendees)} created, {len(skipped_emails)} skipped.")
+        logger.info(f"✅ [Admin] Batch Import: {len(new_attendees)} created, {len(skipped_emails)} skipped")
         
         return {
             "total_processed": len(new_attendees) + len(skipped_emails), 
@@ -234,21 +210,17 @@ async def upload_csv(
             detail="Database error while saving users."
         )
 
+# ==============================================================================
+# ADMIN PORTAL PAGES
+# ==============================================================================
 
-BASE_DIR = Path(__file__).parent.parent.parent  # Goes up to 'app' directory
+BASE_DIR = Path(__file__).parent.parent.parent
 ADMIN_PORTAL_DIR = BASE_DIR / "admin-portal"
-
-# Ensure admin portal directory exists
 ADMIN_PORTAL_DIR.mkdir(exist_ok=True)
-
-# Simple in-memory token storage for admin portal access
-admin_portal_tokens = {}
 
 @router.get("/portal", response_class=HTMLResponse)
 async def admin_portal(request: Request):
     """Serve the main admin portal page"""
-    
-    # Check auth
     is_auth, redirect_response = check_auth_and_redirect(request)
     if not is_auth and redirect_response:
         return redirect_response
@@ -257,40 +229,131 @@ async def admin_portal(request: Request):
     if portal_page.exists():
         return FileResponse(portal_page)
     
-    # Fallback: simple admin portal
     return HTMLResponse("""
     <!DOCTYPE html>
     <html>
     <head>
         <title>Admin Portal - Face Access Control</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-            body { font-family: Arial, sans-serif; padding: 40px; background: #0a0a0f; color: white; }
-            .container { max-width: 800px; margin: 0 auto; }
-            h1 { color: #6366f1; }
-            .card { background: rgba(255,255,255,0.05); padding: 20px; border-radius: 10px; margin: 20px 0; }
-            .btn { background: #6366f1; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+                color: white;
+                min-height: 100vh;
+                padding: 20px;
+            }
+            .container { max-width: 1200px; margin: 0 auto; }
+            .header { 
+                display: flex; 
+                justify-content: space-between; 
+                align-items: center;
+                margin-bottom: 40px;
+                padding: 20px;
+                background: rgba(255,255,255,0.05);
+                border-radius: 15px;
+            }
+            h1 { color: #6366f1; font-size: 2rem; }
+            .logout-btn {
+                background: rgba(255,255,255,0.1);
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.3s;
+            }
+            .logout-btn:hover { background: rgba(255,255,255,0.2); }
+            .grid { 
+                display: grid; 
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+                margin-bottom: 30px;
+            }
+            .card { 
+                background: rgba(255,255,255,0.05);
+                backdrop-filter: blur(10px);
+                padding: 30px;
+                border-radius: 15px;
+                border: 1px solid rgba(255,255,255,0.1);
+                transition: all 0.3s;
+            }
+            .card:hover { 
+                transform: translateY(-5px);
+                border-color: #6366f1;
+                box-shadow: 0 10px 30px rgba(99, 102, 241, 0.2);
+            }
+            .card h3 { color: #a855f7; margin-bottom: 15px; }
+            .btn { 
+                background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+                color: white;
+                padding: 12px 24px;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 16px;
+                transition: all 0.3s;
+                text-decoration: none;
+                display: inline-block;
+                margin-top: 15px;
+            }
+            .btn:hover { 
+                transform: scale(1.05);
+                box-shadow: 0 5px 15px rgba(99, 102, 241, 0.4);
+            }
+            .link-list { list-style: none; margin-top: 15px; }
+            .link-list li { margin: 10px 0; }
+            .link-list a { 
+                color: #a855f7; 
+                text-decoration: none;
+                transition: color 0.3s;
+            }
+            .link-list a:hover { color: #6366f1; }
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>Admin Portal</h1>
-            <div class="card">
-                <h3>Face Access Control System Admin</h3>
-                <p>Manage attendees, upload CSV files, and monitor system access.</p>
-                <div style="margin-top: 20px;">
+            <div class="header">
+                <h1>🔐 Admin Portal</h1>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+            
+            <div class="grid">
+                <div class="card">
+                    <h3>👥 Manage Attendees</h3>
+                    <p>View, search, and manage all registered attendees in the system.</p>
                     <button class="btn" onclick="window.location.href='/api/admin/attendees'">View Attendees</button>
-                    <button class="btn" onclick="window.location.href='/api/admin/upload-csv'">Upload CSV</button>
+                </div>
+                
+                <div class="card">
+                    <h3>📤 Bulk Upload</h3>
+                    <p>Upload CSV files to add multiple attendees at once.</p>
+                    <button class="btn" onclick="showUploadForm()">Upload CSV</button>
+                </div>
+                
+                <div class="card">
+                    <h3>📊 Quick Links</h3>
+                    <ul class="link-list">
+                        <li><a href="/api/admin/attendees">→ List All Attendees</a></li>
+                        <li><a href="/docs">→ API Documentation</a></li>
+                        <li><a href="/api/admin/portal">→ Portal Home</a></li>
+                    </ul>
                 </div>
             </div>
-            <div class="card">
-                <h4>Quick Links:</h4>
-                <ul>
-                    <li><a href="/api/admin/attendees" style="color: #a855f7;">List All Attendees</a></li>
-                    <li><a href="/api/admin/upload-csv" style="color: #a855f7;">Bulk Upload CSV</a></li>
-                    <li><a href="/docs" style="color: #a855f7;">API Documentation</a></li>
-                </ul>
-            </div>
         </div>
+        
+        <script>
+            function logout() {
+                localStorage.removeItem('access_token');
+                document.cookie = 'access_token=; Max-Age=0; path=/';
+                window.location.href = '/api/admin/portal/login';
+            }
+            
+            function showUploadForm() {
+                alert('CSV upload form will be implemented. For now, use the API endpoint: POST /api/admin/upload-csv');
+            }
+        </script>
     </body>
     </html>
     """)
@@ -302,53 +365,167 @@ async def admin_portal_login():
     if login_page.exists():
         return FileResponse(login_page)
     
-    # Fallback: simple login form
     return HTMLResponse("""
     <!DOCTYPE html>
     <html>
     <head>
         <title>Admin Login</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
-            body { font-family: Arial, sans-serif; padding: 40px; background: #0a0a0f; color: white; }
-            .login-box { max-width: 400px; margin: 100px auto; background: rgba(255,255,255,0.05); padding: 40px; border-radius: 10px; }
-            input { width: 100%; padding: 10px; margin: 10px 0; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 5px; }
-            button { width: 100%; padding: 12px; background: #6366f1; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+                color: white;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .login-box { 
+                max-width: 450px;
+                width: 100%;
+                background: rgba(255,255,255,0.05);
+                backdrop-filter: blur(10px);
+                padding: 50px;
+                border-radius: 20px;
+                border: 1px solid rgba(255,255,255,0.1);
+                box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            }
+            h2 { 
+                color: #6366f1; 
+                margin-bottom: 10px;
+                font-size: 2rem;
+            }
+            .subtitle {
+                color: rgba(255,255,255,0.6);
+                margin-bottom: 30px;
+                font-size: 14px;
+            }
+            .form-group { margin-bottom: 20px; }
+            label {
+                display: block;
+                margin-bottom: 8px;
+                color: rgba(255,255,255,0.8);
+                font-size: 14px;
+            }
+            input { 
+                width: 100%;
+                padding: 14px;
+                background: rgba(255,255,255,0.1);
+                border: 1px solid rgba(255,255,255,0.2);
+                color: white;
+                border-radius: 8px;
+                font-size: 16px;
+                transition: all 0.3s;
+            }
+            input:focus {
+                outline: none;
+                border-color: #6366f1;
+                background: rgba(255,255,255,0.15);
+            }
+            input::placeholder { color: rgba(255,255,255,0.4); }
+            button { 
+                width: 100%;
+                padding: 14px;
+                background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 16px;
+                font-weight: 600;
+                margin-top: 20px;
+                transition: all 0.3s;
+            }
+            button:hover { 
+                transform: translateY(-2px);
+                box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+            }
+            button:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+            .error {
+                background: rgba(239, 68, 68, 0.2);
+                border: 1px solid rgba(239, 68, 68, 0.5);
+                color: #fca5a5;
+                padding: 12px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                display: none;
+            }
+            .note {
+                margin-top: 20px;
+                font-size: 12px;
+                color: rgba(255,255,255,0.4);
+                text-align: center;
+            }
         </style>
     </head>
     <body>
         <div class="login-box">
-            <h2>Admin Login</h2>
-            <p>Enter your admin credentials to access the portal.</p>
+            <h2>🔐 Admin Login</h2>
+            <p class="subtitle">Enter your credentials to access the portal</p>
+            
+            <div id="error" class="error"></div>
+            
             <form onsubmit="login(event)">
-                <input type="email" id="email" placeholder="Admin Email" required>
-                <input type="password" id="password" placeholder="Password" required>
-                <button type="submit">Login</button>
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" placeholder="admin@example.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="••••••••" required>
+                </div>
+                
+                <button type="submit" id="loginBtn">Login</button>
             </form>
-            <p style="margin-top: 20px; font-size: 12px; color: rgba(255,255,255,0.5);">
-                Note: This uses the same JWT authentication as the API.
+            
+            <p class="note">
+                This uses JWT authentication. Contact your system administrator for credentials.
             </p>
         </div>
+        
         <script>
             async function login(e) {
                 e.preventDefault();
+                
                 const email = document.getElementById('email').value;
                 const password = document.getElementById('password').value;
+                const loginBtn = document.getElementById('loginBtn');
+                const errorDiv = document.getElementById('error');
                 
-                // Use the existing auth endpoint
-                const response = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({email: email, password: password})
-                });
+                loginBtn.disabled = true;
+                loginBtn.textContent = 'Logging in...';
+                errorDiv.style.display = 'none';
                 
-                if (response.ok) {
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({email, password})
+                    });
+                    
                     const data = await response.json();
-                    // Store the token
-                    localStorage.setItem('access_token', data.access_token);
-                    // Redirect to admin portal
-                    window.location.href = '/api/admin/portal';
-                } else {
-                    alert('Login failed. Please check your credentials.');
+                    
+                    if (response.ok && data.access_token) {
+                        // Store token in localStorage AND cookie
+                        localStorage.setItem('access_token', data.access_token);
+                        document.cookie = `access_token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
+                        
+                        // Redirect to admin portal
+                        window.location.href = '/api/admin/portal';
+                    } else {
+                        throw new Error(data.detail || 'Login failed');
+                    }
+                } catch (error) {
+                    errorDiv.textContent = error.message || 'Login failed. Please check your credentials.';
+                    errorDiv.style.display = 'block';
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = 'Login';
                 }
             }
         </script>
@@ -358,8 +535,7 @@ async def admin_portal_login():
 
 @router.get("/portal/{filename:path}")
 async def admin_portal_static(filename: str):
-    """Serve static files for admin portal (CSS, JS, etc.)"""
-    # Security: prevent directory traversal
+    """Serve static files for admin portal"""
     if ".." in filename or filename.startswith("/"):
         raise HTTPException(status_code=403, detail="Access denied")
     
