@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM python:3.10-slim-bullseye
 
 WORKDIR /app
@@ -15,13 +16,16 @@ RUN apt-get update && apt-get install -y \
 
 COPY requirements.txt .
 
-# Install dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir numpy==1.24.3 && \
-    pip install --no-cache-dir -r requirements.txt
+# --- OPTIMIZED HERE ---
+# 1. Removed '--no-cache-dir' so pip uses cache
+# 2. Added BuildKit mount (optional but recommended) to persist cache across builds
+#    If this line fails, just remove the "--mount=..." part.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
+    pip install numpy==1.24.3 && \
+    pip install -r requirements.txt
 
-# --- CHANGED HERE ---
-# Copy the entire backend directory, not just ./app contents
+# Copy the entire backend directory
 COPY . .
 
 # Set PYTHONPATH to include the root /app so imports work correctly
@@ -33,6 +37,5 @@ USER appuser
 
 EXPOSE 8000
 
-# --- CHANGED HERE ---
 # Point to the file inside the app directory
 CMD ["python", "app/main.py"]
