@@ -61,7 +61,7 @@ async def admin_root(request: Request):
     """Redirect to portal"""
     return RedirectResponse(url="/api/admin/portal")
 
-@router.get("/attendees", response_model=List[AttendeeResponse])
+@router.get("/attendees", response_model=List[AttendeeResult])
 def get_attendees(
     request: Request,
     skip: int = 0, 
