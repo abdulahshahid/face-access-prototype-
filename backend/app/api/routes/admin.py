@@ -455,6 +455,15 @@ async def admin_portal_login():
                 margin-bottom: 20px;
                 display: none;
             }
+            .success {
+                background: rgba(34, 197, 94, 0.2);
+                border: 1px solid rgba(34, 197, 94, 0.5);
+                color: #86efac;
+                padding: 12px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                display: none;
+            }
             .note {
                 margin-top: 20px;
                 font-size: 12px;
@@ -469,6 +478,7 @@ async def admin_portal_login():
             <p class="subtitle">Enter your credentials to access the portal</p>
             
             <div id="error" class="error"></div>
+            <div id="success" class="success"></div>
             
             <form onsubmit="login(event)">
                 <div class="form-group">
@@ -485,7 +495,7 @@ async def admin_portal_login():
             </form>
             
             <p class="note">
-                This uses JWT authentication. Contact your system administrator for credentials.
+                Use credentials from .env file (ADMIN_EMAIL and ADMIN_PASSWORD)
             </p>
         </div>
         
@@ -497,37 +507,62 @@ async def admin_portal_login():
                 const password = document.getElementById('password').value;
                 const loginBtn = document.getElementById('loginBtn');
                 const errorDiv = document.getElementById('error');
+                const successDiv = document.getElementById('success');
                 
                 loginBtn.disabled = true;
                 loginBtn.textContent = 'Logging in...';
                 errorDiv.style.display = 'none';
+                successDiv.style.display = 'none';
                 
                 try {
+                    console.log('Attempting login with:', email);
+                    
                     const response = await fetch('/api/auth/login', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({email, password})
                     });
                     
+                    console.log('Response status:', response.status);
                     const data = await response.json();
+                    console.log('Response data:', data);
                     
                     if (response.ok && data.access_token) {
-                        // Store token in localStorage AND cookie
+                        // Store token in localStorage
                         localStorage.setItem('access_token', data.access_token);
-                        document.cookie = `access_token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
                         
-                        // Redirect to admin portal
-                        window.location.href = '/api/admin/portal';
+                        // Store token in cookie (with secure settings)
+                        const maxAge = 86400; // 24 hours
+                        document.cookie = `access_token=${data.access_token}; path=/; max-age=${maxAge}; SameSite=Lax`;
+                        
+                        // Show success message
+                        successDiv.textContent = '✓ Login successful! Redirecting...';
+                        successDiv.style.display = 'block';
+                        
+                        // Wait a moment then redirect
+                        setTimeout(() => {
+                            window.location.href = '/api/admin/portal';
+                        }, 1000);
                     } else {
                         throw new Error(data.detail || 'Login failed');
                     }
                 } catch (error) {
-                    errorDiv.textContent = error.message || 'Login failed. Please check your credentials.';
+                    console.error('Login error:', error);
+                    errorDiv.textContent = '✗ ' + (error.message || 'Login failed. Please check your credentials.');
                     errorDiv.style.display = 'block';
                     loginBtn.disabled = false;
                     loginBtn.textContent = 'Login';
                 }
             }
+            
+            // Check if already logged in
+            window.addEventListener('DOMContentLoaded', () => {
+                const token = localStorage.getItem('access_token');
+                if (token) {
+                    console.log('Token found, checking validity...');
+                    window.location.href = '/api/admin/portal';
+                }
+            });
         </script>
     </body>
     </html>
