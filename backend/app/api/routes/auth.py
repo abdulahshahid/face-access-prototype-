@@ -1,7 +1,7 @@
 # In your auth routes file (e.g., routes/auth.py)
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from core.security import create_access_token, verify_password
+from core.security import create_access_token, verify_access_token
 from db.session import get_db
 from models.admin import Admin  # You'll need an Admin model
 
@@ -16,7 +16,7 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     # Check if admin exists
     admin = db.query(Admin).filter(Admin.email == login_data.email).first()
     
-    if not admin or not verify_password(login_data.password, admin.hashed_password):
+    if not admin or not verify_access_token(login_data.password, admin.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     # Create JWT token
