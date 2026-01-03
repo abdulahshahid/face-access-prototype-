@@ -27,34 +27,22 @@ def check_auth_and_redirect(request: Request):
     auth_header = request.headers.get("Authorization")
     token = None
     
-    # Debug logging
-    logger.info(f"Auth check for path: {request.url.path}")
-    logger.info(f"Authorization header: {auth_header}")
-    logger.info(f"Cookies: {request.cookies}")
-    
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header[7:]
     
     # Also check cookies
     if not token:
         token = request.cookies.get("access_token")
-        logger.info(f"Token from cookies: {token}")
     
     if token:
         try:
-            logger.info(f"Verifying token: {token[:20]}...")
             payload = verify_access_token(token)
-            logger.info(f"Token payload: {payload}")
             if payload:
-                logger.info(f"✅ User authenticated: {payload.get('sub')}")
                 return True, None
-            else:
-                logger.warning("❌ Token verification returned None payload")
         except Exception as e:
-            logger.warning(f"❌ Token verification failed: {e}")
+            logger.warning(f"Token verification failed: {e}")
     
-    # Not authenticated
-    logger.warning("❌ User not authenticated")
+    # Not authenticated - check if this is an API request or HTML request
     accept_header = request.headers.get("Accept", "")
     if "text/html" in accept_header or request.url.path.endswith("/portal"):
         return False, RedirectResponse(url="/api/admin/portal/login")
@@ -457,6 +445,7 @@ async def admin_portal_login():
             button:disabled {
                 opacity: 0.5;
                 cursor: not-allowed;
+                transform: none;
             }
             .error {
                 background: rgba(239, 68, 68, 0.2);
@@ -482,6 +471,15 @@ async def admin_portal_login():
                 color: rgba(255,255,255,0.4);
                 text-align: center;
             }
+            .debug {
+                margin-top: 20px;
+                padding: 10px;
+                background: rgba(255,255,255,0.05);
+                border-radius: 8px;
+                font-size: 11px;
+                color: rgba(255,255,255,0.5);
+                font-family: monospace;
+            }
         </style>
     </head>
     <body>
@@ -492,85 +490,124 @@ async def admin_portal_login():
             <div id="error" class="error"></div>
             <div id="success" class="success"></div>
             
-            <form onsubmit="login(event)">
+            <form id="loginForm">
                 <div class="form-group">
                     <label for="email">Email Address</label>
-                    <input type="email" id="email" placeholder="admin@example.com" required>
+                    <input type="email" id="email" placeholder="admin@example.com" required autocomplete="email">
                 </div>
                 
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" placeholder="••••••••" required>
+                    <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
                 </div>
                 
                 <button type="submit" id="loginBtn">Login</button>
             </form>
             
+            <p class="note">
+                Use credentials from .env file (ADMIN_EMAIL and ADMIN_PASSWORD)
+            </p>
             
+            <div id="debug" class="debug"></div>
         </div>
         
         <script>
-            async function login(e) {
-                e.preventDefault();
+            const debugLog = (msg) => {
+                console.log(msg);
+                const debugDiv = document.getElementById('debug');
+                debugDiv.innerHTML += msg + '<br>';
+            };
+            
+            debugLog('Page loaded');
+            
+            // Get form element
+            const loginForm = document.getElementById('loginForm');
+            
+            if (!loginForm) {
+                debugLog('ERROR: Form not found!');
+            } else {
+                debugLog('Form found, attaching listener');
                 
-                const email = document.getElementById('email').value;
-                const password = document.getElementById('password').value;
-                const loginBtn = document.getElementById('loginBtn');
-                const errorDiv = document.getElementById('error');
-                const successDiv = document.getElementById('success');
-                
-                loginBtn.disabled = true;
-                loginBtn.textContent = 'Logging in...';
-                errorDiv.style.display = 'none';
-                successDiv.style.display = 'none';
-                
-                try {
-                    console.log('Attempting login with:', email);
+                loginForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    debugLog('Form submitted!');
                     
-                    const response = await fetch('/api/auth/login', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({email, password})
-                    });
+                    const email = document.getElementById('email').value;
+                    const password = document.getElementById('password').value;
+                    const loginBtn = document.getElementById('loginBtn');
+                    const errorDiv = document.getElementById('error');
+                    const successDiv = document.getElementById('success');
                     
-                    console.log('Response status:', response.status);
-                    const data = await response.json();
-                    console.log('Response data:', data);
+                    debugLog('Email: ' + email);
+                    debugLog('Password length: ' + password.length);
                     
-                    if (response.ok && data.access_token) {
-                        // Store token in localStorage
-                        localStorage.setItem('access_token', data.access_token);
+                    loginBtn.disabled = true;
+                    loginBtn.textContent = 'Logging in...';
+                    errorDiv.style.display = 'none';
+                    successDiv.style.display = 'none';
+                    
+                    try {
+                        debugLog('Sending request to /api/auth/login');
                         
-                        // Store token in cookie (with secure settings)
-                        const maxAge = 86400; // 24 hours
-                        document.cookie = `access_token=${data.access_token}; path=/; max-age=${maxAge}; SameSite=Lax`;
+                        const response = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify({email: email, password: password})
+                        });
                         
-                        // Show success message
-                        successDiv.textContent = '✓ Login successful! Redirecting...';
-                        successDiv.style.display = 'block';
+                        debugLog('Response status: ' + response.status);
                         
-                        // Wait a moment then redirect
-                        setTimeout(() => {
-                            window.location.href = '/api/admin/portal';
-                        }, 1000);
-                    } else {
-                        throw new Error(data.detail || 'Login failed');
+                        const data = await response.json();
+                        debugLog('Response data: ' + JSON.stringify(data));
+                        
+                        if (response.ok && data.access_token) {
+                            debugLog('Login successful! Token received');
+                            
+                            // Store token in localStorage
+                            localStorage.setItem('access_token', data.access_token);
+                            debugLog('Token stored in localStorage');
+                            
+                            // Store token in cookie
+                            const maxAge = 86400; // 24 hours
+                            document.cookie = `access_token=${data.access_token}; path=/; max-age=${maxAge}; SameSite=Lax`;
+                            debugLog('Token stored in cookie');
+                            
+                            // Show success message
+                            successDiv.textContent = '✓ Login successful! Redirecting...';
+                            successDiv.style.display = 'block';
+                            
+                            // Wait a moment then redirect
+                            setTimeout(() => {
+                                debugLog('Redirecting to portal...');
+                                window.location.href = '/api/admin/portal';
+                            }, 1000);
+                        } else {
+                            throw new Error(data.detail || 'Login failed');
+                        }
+                    } catch (error) {
+                        debugLog('ERROR: ' + error.message);
+                        console.error('Login error:', error);
+                        errorDiv.textContent = '✗ ' + (error.message || 'Login failed. Check credentials.');
+                        errorDiv.style.display = 'block';
+                        loginBtn.disabled = false;
+                        loginBtn.textContent = 'Login';
                     }
-                } catch (error) {
-                    console.error('Login error:', error);
-                    errorDiv.textContent = '✗ ' + (error.message || 'Login failed. Please check your credentials.');
-                    errorDiv.style.display = 'block';
-                    loginBtn.disabled = false;
-                    loginBtn.textContent = 'Login';
-                }
+                });
+                
+                debugLog('Event listener attached successfully');
             }
             
             // Check if already logged in
             window.addEventListener('DOMContentLoaded', () => {
                 const token = localStorage.getItem('access_token');
                 if (token) {
-                    console.log('Token found, checking validity...');
+                    debugLog('Token found in storage, redirecting...');
                     window.location.href = '/api/admin/portal';
+                } else {
+                    debugLog('No token found, showing login form');
                 }
             });
         </script>
