@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Portal - Face Access Control</title>
+    <link rel="stylesheet" href="/api/admin/portal/admin.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    
+    <!-- Main Container -->
+    <div class="admin-container">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">🔐</div>
+                    <div>
+                        <span class="logo-text">SecureAccess</span>
+                        <span class="logo-subtext">Admin Portal</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sidebar-menu">
+                <a href="#dashboard" class="menu-item active" onclick="showSection('dashboard')">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#attendees" class="menu-item" onclick="showSection('attendees')">
+                    <i class="fas fa-users"></i>
+                    <span>Attendees</span>
+                </a>
+                <a href="#upload" class="menu-item" onclick="showSection('upload')">
+                    <i class="fas fa-file-upload"></i>
+                    <span>Bulk Upload</span>
+                </a>
+            </div>
+            
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">
+                        <i class="fas fa-user-shield"></i>
+                    </div>
+                    <div>
+                        <span class="user-name" id="adminEmail">Administrator</span>
+                        <span class="user-role">Admin</span>
+                    </div>
+                </div>
+                <button class="btn-logout" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </nav>
+        
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <h1 id="pageTitle">Dashboard</h1>
+                    <p id="pageSubtitle" class="page-subtitle">System overview and analytics</p>
+                </div>
+                <div class="topbar-right">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="globalSearch" placeholder="Search attendees..." onkeyup="searchAttendees()">
+                    </div>
+                </div>
+            </header>
+            
+            <!-- Content Sections -->
+            <div class="content-wrapper">
+                <!-- Dashboard Section -->
+                <section id="dashboardSection" class="content-section active">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <h3>Total Attendees</h3>
+                                <i class="fas fa-users stat-icon"></i>
+                            </div>
+                            <div class="stat-value" id="totalAttendees">Loading...</div>
+                            <button class="btn-small" onclick="showSection('attendees')">View All</button>
+                        </div>
+                        
+                        <div class="stat-card">
+                            <div class="stat-header">
+                                <h3>API Status</h3>
+                                <i class="fas fa-heartbeat stat-icon"></i>
+                            </div>
+                            <div class="stat-value">
+                                <span class="status-good" id="apiStatus">Checking...</span>
+                            </div>
+                            <div class="stat-trend" id="apiLatency">-</div>
+                        </div>
+                    </div>
+                    
+                    <div class="quick-actions">
+                        <h3>Quick Actions</h3>
+                        <div class="actions-grid">
+                            <div class="action-card" onclick="showSection('upload')">
+                                <i class="fas fa-file-csv"></i>
+                                <span>Upload CSV</span>
+                            </div>
+                            <div class="action-card" onclick="showSection('attendees')">
+                                <i class="fas fa-user-plus"></i>
+                                <span>Add Attendee</span>
+                            </div>
+                            <div class="action-card" onclick="window.open('/docs', '_blank')">
+                                <i class="fas fa-book"></i>
+                                <span>API Docs</span>
+                            </div>
+                            <div class="action-card" onclick="window.open('/api/health', '_blank')">
+                                <i class="fas fa-stethoscope"></i>
+                                <span>Health Check</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Attendees Section -->
+                <section id="attendeesSection" class="content-section">
+                    <div class="section-header">
+                        <h2>Attendee Management</h2>
+                        <div class="header-actions">
+                            <button class="btn-primary" onclick="loadAttendees()">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table id="attendeesTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Invite Code</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendeesTableBody">
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 40px;">
+                                        <div class="loading-spinner">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            <span>Loading attendees...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+                <!-- Upload Section -->
+                <section id="uploadSection" class="content-section">
+                    <div class="upload-container">
+                        <h2>Bulk Upload Attendees</h2>
+                        <p class="upload-description">
+                            Upload a CSV file with email addresses to bulk create attendee records.
+                            Each attendee will receive a unique invite code.
+                        </p>
+                        
+                        <div class="upload-area" id="dropArea" onclick="document.getElementById('csvFile').click()">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <h3>Click to Upload CSV File</h3>
+                            <p>or drag and drop</p>
+                            <input type="file" id="csvFile" accept=".csv" style="display: none;">
+                            <p class="file-requirements">CSV format only (email,name)</p>
+                        </div>
+                        
+                        <div class="csv-template">
+                            <h4>CSV Format:</h4>
+                            <div class="code-block">
+<pre>email,name
+john@example.com,John Doe
+jane@example.com,Jane Smith</pre>
+                            </div>
+                        </div>
+                        
+                        <div id="uploadResults" class="upload-results" style="display: none;">
+                            <h4>Upload Results:</h4>
+                            <div class="results-grid">
+                                <div class="result-item success">
+                                    <span class="result-count" id="successCount">0</span>
+                                    <span class="result-label">Successful</span>
+                                </div>
+                                <div class="result-item skipped">
+                                    <span class="result-count" id="skippedCount">0</span>
+                                    <span class="result-label">Skipped</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    
+    <script src="/api/admin/portal/admin.js"></script>
+</body>
+</html>

@@ -201,3 +201,133 @@ async def upload_csv(
             status_code=500, 
             detail="Database error while saving users."
         )
+
+
+BASE_DIR = Path(__file__).parent.parent.parent  # Goes up to 'app' directory
+ADMIN_PORTAL_DIR = BASE_DIR / "admin-portal"
+
+# Ensure admin portal directory exists
+ADMIN_PORTAL_DIR.mkdir(exist_ok=True)
+
+# Simple in-memory token storage for admin portal access
+admin_portal_tokens = {}
+
+@router.get("/portal", response_class=HTMLResponse)
+async def admin_portal(request: Request):
+    """Serve the main admin portal page"""
+    portal_page = ADMIN_PORTAL_DIR / "index.html"
+    if portal_page.exists():
+        return FileResponse(portal_page)
+    
+    # Fallback: simple admin portal
+    return HTMLResponse("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Admin Portal - Face Access Control</title>
+        <style>
+            body { font-family: Arial, sans-serif; padding: 40px; background: #0a0a0f; color: white; }
+            .container { max-width: 800px; margin: 0 auto; }
+            h1 { color: #6366f1; }
+            .card { background: rgba(255,255,255,0.05); padding: 20px; border-radius: 10px; margin: 20px 0; }
+            .btn { background: #6366f1; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Admin Portal</h1>
+            <div class="card">
+                <h3>Face Access Control System Admin</h3>
+                <p>Manage attendees, upload CSV files, and monitor system access.</p>
+                <div style="margin-top: 20px;">
+                    <button class="btn" onclick="window.location.href='/api/admin/attendees'">View Attendees</button>
+                    <button class="btn" onclick="window.location.href='/api/admin/upload-csv'">Upload CSV</button>
+                </div>
+            </div>
+            <div class="card">
+                <h4>Quick Links:</h4>
+                <ul>
+                    <li><a href="/api/admin/attendees" style="color: #a855f7;">List All Attendees</a></li>
+                    <li><a href="/api/admin/upload-csv" style="color: #a855f7;">Bulk Upload CSV</a></li>
+                    <li><a href="/docs" style="color: #a855f7;">API Documentation</a></li>
+                </ul>
+            </div>
+        </div>
+    </body>
+    </html>
+    """)
+
+@router.get("/portal/login", response_class=HTMLResponse)
+async def admin_portal_login():
+    """Serve the admin portal login page"""
+    login_page = ADMIN_PORTAL_DIR / "login.html"
+    if login_page.exists():
+        return FileResponse(login_page)
+    
+    # Fallback: simple login form
+    return HTMLResponse("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Admin Login</title>
+        <style>
+            body { font-family: Arial, sans-serif; padding: 40px; background: #0a0a0f; color: white; }
+            .login-box { max-width: 400px; margin: 100px auto; background: rgba(255,255,255,0.05); padding: 40px; border-radius: 10px; }
+            input { width: 100%; padding: 10px; margin: 10px 0; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 5px; }
+            button { width: 100%; padding: 12px; background: #6366f1; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px; }
+        </style>
+    </head>
+    <body>
+        <div class="login-box">
+            <h2>Admin Login</h2>
+            <p>Enter your admin credentials to access the portal.</p>
+            <form onsubmit="login(event)">
+                <input type="email" id="email" placeholder="Admin Email" required>
+                <input type="password" id="password" placeholder="Password" required>
+                <button type="submit">Login</button>
+            </form>
+            <p style="margin-top: 20px; font-size: 12px; color: rgba(255,255,255,0.5);">
+                Note: This uses the same JWT authentication as the API.
+            </p>
+        </div>
+        <script>
+            async function login(e) {
+                e.preventDefault();
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                
+                // Use the existing auth endpoint
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email: email, password: password})
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    // Store the token
+                    localStorage.setItem('access_token', data.access_token);
+                    // Redirect to admin portal
+                    window.location.href = '/api/admin/portal';
+                } else {
+                    alert('Login failed. Please check your credentials.');
+                }
+            }
+        </script>
+    </body>
+    </html>
+    """)
+
+@router.get("/portal/{filename:path}")
+async def admin_portal_static(filename: str):
+    """Serve static files for admin portal (CSS, JS, etc.)"""
+    # Security: prevent directory traversal
+    if ".." in filename or filename.startswith("/"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    file_path = ADMIN_PORTAL_DIR / filename
+    
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(file_path)
+    
+    raise HTTPException(status_code=404, detail="File not found")
