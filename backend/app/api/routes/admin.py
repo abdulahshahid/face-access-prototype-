@@ -27,26 +27,35 @@ def check_auth_and_redirect(request: Request):
     auth_header = request.headers.get("Authorization")
     token = None
     
+    # Try to get token from Authorization header
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header[7:]
     
-    # Also check cookies
+    # Try to get token from cookies
     if not token:
         token = request.cookies.get("access_token")
     
+    # Validate token
     if token:
         try:
             payload = verify_access_token(token)
-            if payload:
-                return True, None
+            if payload and payload.get("is_admin"):
+                logger.info(f"✓ Authenticated admin: {payload.get('sub')}")
+                return True, None  # Authenticated, no redirect needed
         except Exception as e:
             logger.warning(f"Token verification failed: {e}")
     
-    # Not authenticated - check if this is an API request or HTML request
+    # Not authenticated - determine response type
     accept_header = request.headers.get("Accept", "")
-    if "text/html" in accept_header or request.url.path.endswith("/portal"):
-        return False, RedirectResponse(url="/api/admin/portal/login")
+    is_html_request = "text/html" in accept_header or request.url.path.endswith("/portal")
+    
+    if is_html_request:
+        # HTML request - redirect to login
+        logger.info(f"↺ Redirecting to login: {request.url.path}")
+        return False, RedirectResponse(url="/api/admin/portal/login", status_code=302)
     else:
+        # API request - return 401
+        logger.warning(f"✗ Unauthorized API request: {request.url.path}")
         return False, JSONResponse(
             status_code=401,
             content={"detail": "Not authenticated"}
@@ -134,7 +143,7 @@ def delete_attendee(
             detail="Internal Database Error during deletion."
         )
 
-@router.post("/upload-csv", response_model=BatchUploadResponse)
+@router.post("/upload-csv")
 async def upload_csv(
     request: Request,
     file: UploadFile = File(...), 
@@ -168,6 +177,7 @@ async def upload_csv(
 
     new_attendees = []
     skipped_emails = []
+    results = []  # For returning detailed results
     
     for row in csv_reader:
         clean_row = {k.lower().strip(): v.strip() for k, v in row.items() if k}
@@ -192,15 +202,25 @@ async def upload_csv(
         )
         db.add(attendee)
         new_attendees.append(attendee)
+        
+        # Store for results
+        results.append({
+            "name": name,
+            "email": email,
+            "invite_code": invite_code
+        })
 
     try:
         db.commit()
         logger.info(f"✅ [Admin] Batch Import: {len(new_attendees)} created, {len(skipped_emails)} skipped")
         
         return {
-            "total_processed": len(new_attendees) + len(skipped_emails), 
+            "status": "success",
+            "total_processed": len(new_attendees) + len(skipped_emails),
             "success_count": len(new_attendees),
-            "skipped_emails": skipped_emails
+            "skipped_count": len(skipped_emails),
+            "skipped_emails": skipped_emails,
+            "results": results  # Include detailed results
         }
     except Exception as e:
         db.rollback()
@@ -216,19 +236,14 @@ async def upload_csv(
 
 BASE_DIR = Path(__file__).parent.parent.parent
 ADMIN_PORTAL_DIR = BASE_DIR / "admin-portal"
-print(f"Admin Portal Directory: {ADMIN_PORTAL_DIR} {BASE_DIR}")
 ADMIN_PORTAL_DIR.mkdir(exist_ok=True)
 
 @router.get("/portal", response_class=HTMLResponse)
 async def admin_portal(request: Request):
-    """Serve the main admin portal page"""
+    """Serve the main admin portal page with integrated bulk upload"""
     is_auth, redirect_response = check_auth_and_redirect(request)
     if not is_auth and redirect_response:
         return redirect_response
-    
-    portal_page = ADMIN_PORTAL_DIR / "index.html"
-    if portal_page.exists():
-        return FileResponse(portal_page)
     
     return HTMLResponse("""
     <!DOCTYPE html>
@@ -236,24 +251,41 @@ async def admin_portal(request: Request):
     <head>
         <title>Admin Portal - Face Access Control</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { 
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: #0a0a0f;
                 color: white;
                 min-height: 100vh;
                 padding: 20px;
             }
-            .container { max-width: 1200px; margin: 0 auto; }
+            .bg-gradient {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.15) 0%, transparent 50%),
+                            radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                            radial-gradient(circle at 40% 20%, rgba(168, 85, 247, 0.1) 0%, transparent 40%);
+                z-index: 0;
+                pointer-events: none;
+            }
+            .container { max-width: 1400px; margin: 0 auto; position: relative; z-index: 1; }
             .header { 
                 display: flex; 
                 justify-content: space-between; 
                 align-items: center;
                 margin-bottom: 40px;
-                padding: 20px;
-                background: rgba(255,255,255,0.05);
-                border-radius: 15px;
+                padding: 20px 30px;
+                background: rgba(255,255,255,0.03);
+                backdrop-filter: blur(10px);
+                border-radius: 20px;
+                border: 1px solid rgba(255,255,255,0.08);
             }
             h1 { color: #6366f1; font-size: 2rem; }
             .logout-btn {
@@ -264,367 +296,673 @@ async def admin_portal(request: Request):
                 border-radius: 8px;
                 cursor: pointer;
                 transition: all 0.3s;
+                font-size: 14px;
+                font-weight: 500;
             }
             .logout-btn:hover { background: rgba(255,255,255,0.2); }
-            .grid { 
-                display: grid; 
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            
+            /* Tabs */
+            .tabs {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 30px;
+                border-bottom: 1px solid rgba(255,255,255,0.08);
+                padding-bottom: 0;
+            }
+            .tab {
+                padding: 15px 25px;
+                background: transparent;
+                border: none;
+                color: rgba(255,255,255,0.6);
+                cursor: pointer;
+                font-size: 15px;
+                font-weight: 500;
+                border-bottom: 3px solid transparent;
+                transition: all 0.3s;
+            }
+            .tab:hover { color: rgba(255,255,255,0.9); }
+            .tab.active {
+                color: #6366f1;
+                border-bottom-color: #6366f1;
+            }
+            
+            /* Tab Content */
+            .tab-content { display: none; }
+            .tab-content.active { display: block; }
+            
+            /* Upload Section */
+            .upload-card {
+                background: rgba(255,255,255,0.03);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 20px;
+                padding: 40px;
+                backdrop-filter: blur(10px);
+                max-width: 800px;
+                margin: 0 auto;
+            }
+            .upload-icon {
+                width: 80px;
+                height: 80px;
+                background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%);
+                border: 1px solid rgba(99, 102, 241, 0.3);
+                border-radius: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 40px;
+                margin: 0 auto 25px;
+            }
+            .upload-area {
+                border: 2px dashed rgba(99, 102, 241, 0.3);
+                background: rgba(99, 102, 241, 0.05);
+                padding: 60px 40px;
+                text-align: center;
+                border-radius: 16px;
+                transition: all 0.3s;
+                cursor: pointer;
+                margin: 30px 0;
+            }
+            .upload-area:hover, .upload-area.dragover {
+                border-color: rgba(99, 102, 241, 0.5);
+                background: rgba(99, 102, 241, 0.1);
+            }
+            .upload-area h3 { margin: 15px 0 10px; font-size: 20px; }
+            .upload-area p { color: rgba(255,255,255,0.6); margin: 5px 0; }
+            .file-selected {
+                margin-top: 20px;
+                padding: 15px;
+                background: rgba(34, 197, 94, 0.1);
+                border: 1px solid rgba(34, 197, 94, 0.3);
+                border-radius: 12px;
+                color: rgba(34, 197, 94, 1);
+                display: none;
+            }
+            .btn {
+                background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+                color: white;
+                padding: 14px 28px;
+                border: none;
+                border-radius: 12px;
+                cursor: pointer;
+                font-size: 16px;
+                font-weight: 600;
+                transition: all 0.3s;
+            }
+            .btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+            }
+            .btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+                transform: none;
+            }
+            
+            /* Status Messages */
+            .status {
+                margin-top: 30px;
+                padding: 20px;
+                border-radius: 12px;
+                display: none;
+                font-size: 15px;
+            }
+            .status.success {
+                background: rgba(34, 197, 94, 0.1);
+                border: 1px solid rgba(34, 197, 94, 0.3);
+                color: rgba(34, 197, 94, 1);
+            }
+            .status.error {
+                background: rgba(239, 68, 68, 0.1);
+                border: 1px solid rgba(239, 68, 68, 0.3);
+                color: rgba(239, 68, 68, 1);
+            }
+            .status.processing {
+                background: rgba(99, 102, 241, 0.1);
+                border: 1px solid rgba(99, 102, 241, 0.3);
+                color: rgba(99, 102, 241, 1);
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .spinner {
+                width: 18px;
+                height: 18px;
+                border: 2px solid rgba(99, 102, 241, 0.3);
+                border-top-color: rgba(99, 102, 241, 1);
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+            }
+            @keyframes spin { to { transform: rotate(360deg); } }
+            
+            /* Results */
+            .results-section {
+                margin-top: 40px;
+                display: none;
+            }
+            .results-section.show { display: block; }
+            .results-summary {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
                 gap: 20px;
                 margin-bottom: 30px;
             }
-            .card { 
-                background: rgba(255,255,255,0.05);
-                backdrop-filter: blur(10px);
-                padding: 30px;
-                border-radius: 15px;
-                border: 1px solid rgba(255,255,255,0.1);
-                transition: all 0.3s;
+            .result-stat {
+                background: rgba(255,255,255,0.03);
+                padding: 25px;
+                border-radius: 12px;
+                border: 1px solid rgba(255,255,255,0.08);
+                text-align: center;
             }
-            .card:hover { 
-                transform: translateY(-5px);
-                border-color: #6366f1;
-                box-shadow: 0 10px 30px rgba(99, 102, 241, 0.2);
+            .result-stat .number {
+                font-size: 36px;
+                font-weight: 700;
+                margin-bottom: 8px;
             }
-            .card h3 { color: #a855f7; margin-bottom: 15px; }
-            .btn { 
-                background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-                color: white;
-                padding: 12px 24px;
-                border: none;
+            .result-stat.success .number { color: #22c55e; }
+            .result-stat.skipped .number { color: #f59e0b; }
+            .result-stat .label {
+                font-size: 14px;
+                color: rgba(255,255,255,0.6);
+            }
+            .invite-list {
+                background: rgba(255,255,255,0.03);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 12px;
+                padding: 25px;
+                max-height: 400px;
+                overflow-y: auto;
+            }
+            .invite-item {
+                padding: 15px;
+                background: rgba(255,255,255,0.02);
+                border: 1px solid rgba(255,255,255,0.05);
                 border-radius: 8px;
-                cursor: pointer;
+                margin-bottom: 10px;
+            }
+            .invite-item:hover {
+                background: rgba(255,255,255,0.05);
+            }
+            .invite-name {
+                font-weight: 600;
+                margin-bottom: 5px;
                 font-size: 16px;
+            }
+            .invite-email {
+                font-size: 13px;
+                color: rgba(255,255,255,0.5);
+                margin-bottom: 8px;
+            }
+            .invite-link {
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            }
+            .invite-link input {
+                flex: 1;
+                padding: 8px 12px;
+                background: rgba(255,255,255,0.05);
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 6px;
+                color: rgba(99, 102, 241, 0.9);
+                font-size: 13px;
+            }
+            .copy-btn {
+                background: rgba(99, 102, 241, 0.15);
+                border: 1px solid rgba(99, 102, 241, 0.3);
+                color: rgba(99, 102, 241, 1);
+                padding: 8px 16px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: 500;
                 transition: all 0.3s;
-                text-decoration: none;
-                display: inline-block;
-                margin-top: 15px;
             }
-            .btn:hover { 
-                transform: scale(1.05);
-                box-shadow: 0 5px 15px rgba(99, 102, 241, 0.4);
+            .copy-btn:hover {
+                background: rgba(99, 102, 241, 0.25);
             }
-            .link-list { list-style: none; margin-top: 15px; }
-            .link-list li { margin: 10px 0; }
-            .link-list a { 
-                color: #a855f7; 
-                text-decoration: none;
-                transition: color 0.3s;
+            
+            /* Attendees Table */
+            .search-bar {
+                margin-bottom: 25px;
+                display: flex;
+                gap: 10px;
             }
-            .link-list a:hover { color: #6366f1; }
+            .search-bar input {
+                flex: 1;
+                padding: 14px 18px;
+                background: rgba(255,255,255,0.05);
+                border: 1px solid rgba(255,255,255,0.1);
+                color: white;
+                border-radius: 10px;
+                font-size: 15px;
+            }
+            .search-bar input::placeholder { color: rgba(255,255,255,0.4); }
+            .table-container {
+                background: rgba(255,255,255,0.03);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 16px;
+                overflow: hidden;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th, td {
+                padding: 16px 20px;
+                text-align: left;
+                border-bottom: 1px solid rgba(255,255,255,0.05);
+            }
+            th {
+                background: rgba(255,255,255,0.03);
+                color: #a855f7;
+                font-weight: 600;
+                font-size: 13px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            td { font-size: 14px; }
+            .status-badge {
+                padding: 5px 12px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            .status-active { background: rgba(34, 197, 94, 0.2); color: #86efac; }
+            .status-pending { background: rgba(251, 191, 36, 0.2); color: #fde047; }
+            .delete-btn {
+                background: rgba(239, 68, 68, 0.15);
+                color: #fca5a5;
+                padding: 7px 14px;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 13px;
+                transition: all 0.3s;
+            }
+            .delete-btn:hover { background: rgba(239, 68, 68, 0.3); }
+            .loading { text-align: center; padding: 60px; color: rgba(255,255,255,0.5); }
+            
+            .csv-template {
+                background: rgba(255,255,255,0.02);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 12px;
+                padding: 20px;
+                margin: 25px 0;
+            }
+            .csv-template h4 {
+                margin-bottom: 15px;
+                font-size: 16px;
+            }
+            .code-block {
+                background: rgba(0,0,0,0.3);
+                padding: 15px;
+                border-radius: 8px;
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+                color: #22c55e;
+                margin-bottom: 15px;
+                overflow-x: auto;
+            }
+            
+            @media (max-width: 768px) {
+                .header { flex-direction: column; gap: 15px; }
+                .tabs { overflow-x: auto; }
+                .results-summary { grid-template-columns: 1fr; }
+            }
         </style>
     </head>
     <body>
+        <div class="bg-gradient"></div>
+        
         <div class="container">
             <div class="header">
                 <h1>🔐 Admin Portal</h1>
                 <button class="logout-btn" onclick="logout()">Logout</button>
             </div>
             
-            <div class="grid">
-                <div class="card">
-                    <h3>👥 Manage Attendees</h3>
-                    <p>View, search, and manage all registered attendees in the system.</p>
-                    <button class="btn" onclick="window.location.href='/api/admin/attendees'">View Attendees</button>
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('attendees')">👥 Attendees</button>
+                <button class="tab" onclick="switchTab('upload')">📤 Bulk Upload</button>
+            </div>
+            
+            <!-- Attendees Tab -->
+            <div id="attendeesTab" class="tab-content active">
+                <div class="search-bar">
+                    <input type="text" id="searchInput" placeholder="Search by name or email..." onkeyup="searchAttendees()">
+                    <button class="btn" onclick="loadAttendees()">Refresh</button>
                 </div>
-                
-                <div class="card">
-                    <h3>📤 Bulk Upload</h3>
-                    <p>Upload CSV files to add multiple attendees at once.</p>
-                    <button class="btn" onclick="showUploadForm()">Upload CSV</button>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th>Invite Code</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendeesTableBody">
+                            <tr><td colspan="6" class="loading">Loading attendees...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
-                
-                <div class="card">
-                    <h3>📊 Quick Links</h3>
-                    <ul class="link-list">
-                        <li><a href="/api/admin/attendees">→ List All Attendees</a></li>
-                        <li><a href="/docs">→ API Documentation</a></li>
-                        <li><a href="/api/admin/portal">→ Portal Home</a></li>
-                    </ul>
+            </div>
+            
+            <!-- Upload Tab -->
+            <div id="uploadTab" class="tab-content">
+                <div class="upload-card">
+                    <div class="upload-icon">📄</div>
+                    <h2 style="text-align: center; margin-bottom: 10px;">Bulk Upload Attendees</h2>
+                    <p style="text-align: center; color: rgba(255,255,255,0.6); margin-bottom: 30px;">
+                        Upload a CSV file with email addresses to bulk create attendee records.
+                    </p>
+                    
+                    <form id="uploadForm">
+                        <div class="upload-area" id="dropArea">
+                            <i style="font-size: 48px;">☁️</i>
+                            <h3>Drag & Drop CSV File</h3>
+                            <p>or click to browse</p>
+                            <input type="file" id="csvFile" accept=".csv" style="display: none;">
+                            <button type="button" class="btn" style="margin-top: 20px;" 
+                                    onclick="document.getElementById('csvFile').click()">
+                                Browse Files
+                            </button>
+                            <p style="margin-top: 15px; font-size: 13px; color: rgba(255,255,255,0.4);">
+                                Max file size: 5MB • CSV format only
+                            </p>
+                            <div class="file-selected" id="fileSelected"></div>
+                        </div>
+                        
+                        <div class="csv-template">
+                            <h4>CSV Template Format:</h4>
+                            <div class="code-block">email,name
+john@example.com,John Doe
+jane@example.com,Jane Smith
+alex@example.com,Alex Johnson</div>
+                            <button type="button" class="btn" onclick="downloadTemplate()" 
+                                    style="padding: 10px 20px; font-size: 14px;">
+                                📥 Download Template
+                            </button>
+                        </div>
+                        
+                        <div style="text-align: center;">
+                            <button type="submit" class="btn" id="uploadBtn">
+                                Generate Invite Links
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <div id="status" class="status"></div>
+                    
+                    <div id="resultsSection" class="results-section">
+                        <h3 style="margin-bottom: 25px; font-size: 22px;">Upload Results</h3>
+                        <div class="results-summary">
+                            <div class="result-stat success">
+                                <div class="number" id="successCount">0</div>
+                                <div class="label">Successfully Added</div>
+                            </div>
+                            <div class="result-stat skipped">
+                                <div class="number" id="skippedCount">0</div>
+                                <div class="label">Skipped (Duplicates)</div>
+                            </div>
+                        </div>
+                        
+                        <h4 style="margin-bottom: 15px;">Generated Invite Links</h4>
+                        <div class="invite-list" id="inviteList"></div>
+                    </div>
                 </div>
             </div>
         </div>
         
         <script>
+            const token = localStorage.getItem('access_token');
+            let allAttendees = [];
+            
             function logout() {
                 localStorage.removeItem('access_token');
                 document.cookie = 'access_token=; Max-Age=0; path=/';
                 window.location.href = '/api/admin/portal/login';
             }
             
-            function showUploadForm() {
-                alert('CSV upload form will be implemented. For now, use the API endpoint: POST /api/admin/upload-csv');
+            function switchTab(tab) {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                event.target.classList.add('active');
+                document.getElementById(tab + 'Tab').classList.add('active');
+                
+                if (tab === 'attendees') {
+                    loadAttendees();
+                }
             }
-        </script>
-    </body>
-    </html>
-    """)
+            
+            // Attendees Management
+            async function loadAttendees() {
+                const tbody = document.getElementById('attendeesTableBody');
+                tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading attendees...</td></tr>';
 
-@router.get("/portal/login", response_class=HTMLResponse)
-async def admin_portal_login():
-    """Serve the admin portal login page"""
-    login_page = ADMIN_PORTAL_DIR / "login.html"
-    if login_page.exists():
-        return FileResponse(login_page)
-    
-    return HTMLResponse("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Admin Login</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
-                color: white;
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
+                try {
+                    const response = await fetch('/api/admin/attendees', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    if (!response.ok) throw new Error('Failed to load attendees');
+
+                    allAttendees = await response.json();
+                    displayAttendees(allAttendees);
+                } catch (error) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="color: #fca5a5; text-align: center; padding: 40px;">Error: ${error.message}</td></tr>`;
+                }
             }
-            .login-box { 
-                max-width: 450px;
-                width: 100%;
-                background: rgba(255,255,255,0.05);
-                backdrop-filter: blur(10px);
-                padding: 50px;
-                border-radius: 20px;
-                border: 1px solid rgba(255,255,255,0.1);
-                box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-            }
-            h2 { 
-                color: #6366f1; 
-                margin-bottom: 10px;
-                font-size: 2rem;
-            }
-            .subtitle {
-                color: rgba(255,255,255,0.6);
-                margin-bottom: 30px;
-                font-size: 14px;
-            }
-            .form-group { margin-bottom: 20px; }
-            label {
-                display: block;
-                margin-bottom: 8px;
-                color: rgba(255,255,255,0.8);
-                font-size: 14px;
-            }
-            input { 
-                width: 100%;
-                padding: 14px;
-                background: rgba(255,255,255,0.1);
-                border: 1px solid rgba(255,255,255,0.2);
-                color: white;
-                border-radius: 8px;
-                font-size: 16px;
-                transition: all 0.3s;
-            }
-            input:focus {
-                outline: none;
-                border-color: #6366f1;
-                background: rgba(255,255,255,0.15);
-            }
-            input::placeholder { color: rgba(255,255,255,0.4); }
-            button { 
-                width: 100%;
-                padding: 14px;
-                background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 16px;
-                font-weight: 600;
-                margin-top: 20px;
-                transition: all 0.3s;
-            }
-            button:hover { 
-                transform: translateY(-2px);
-                box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
-            }
-            button:disabled {
-                opacity: 0.5;
-                cursor: not-allowed;
-                transform: none;
-            }
-            .error {
-                background: rgba(239, 68, 68, 0.2);
-                border: 1px solid rgba(239, 68, 68, 0.5);
-                color: #fca5a5;
-                padding: 12px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-                display: none;
-            }
-            .success {
-                background: rgba(34, 197, 94, 0.2);
-                border: 1px solid rgba(34, 197, 94, 0.5);
-                color: #86efac;
-                padding: 12px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-                display: none;
-            }
-            .note {
-                margin-top: 20px;
-                font-size: 12px;
-                color: rgba(255,255,255,0.4);
-                text-align: center;
-            }
-            .debug {
-                margin-top: 20px;
-                padding: 10px;
-                background: rgba(255,255,255,0.05);
-                border-radius: 8px;
-                font-size: 11px;
-                color: rgba(255,255,255,0.5);
-                font-family: monospace;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="login-box">
-            <h2>🔐 Admin Login</h2>
-            <p class="subtitle">Enter your credentials to access the portal</p>
-            
-            <div id="error" class="error"></div>
-            <div id="success" class="success"></div>
-            
-            <form id="loginForm">
-                <div class="form-group">
-                    <label for="email">Email Address</label>
-                    <input type="email" id="email" placeholder="admin@example.com" required autocomplete="email">
-                </div>
+
+            function displayAttendees(attendees) {
+                const tbody = document.getElementById('attendeesTableBody');
                 
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
-                </div>
-                
-                <button type="submit" id="loginBtn">Login</button>
-            </form>
-            
-            <p class="note">
-                Use credentials from .env file (ADMIN_EMAIL and ADMIN_PASSWORD)
-            </p>
-            
-            <div id="debug" class="debug"></div>
-        </div>
-        
-        <script>
-            const debugLog = (msg) => {
-                console.log(msg);
-                const debugDiv = document.getElementById('debug');
-                debugDiv.innerHTML += msg + '<br>';
-            };
-            
-            debugLog('Page loaded');
-            
-            // Get form element
-            const loginForm = document.getElementById('loginForm');
-            
-            if (!loginForm) {
-                debugLog('ERROR: Form not found!');
-            } else {
-                debugLog('Form found, attaching listener');
-                
-                loginForm.addEventListener('submit', async function(e) {
-                    e.preventDefault();
-                    debugLog('Form submitted!');
-                    
-                    const email = document.getElementById('email').value;
-                    const password = document.getElementById('password').value;
-                    const loginBtn = document.getElementById('loginBtn');
-                    const errorDiv = document.getElementById('error');
-                    const successDiv = document.getElementById('success');
-                    
-                    debugLog('Email: ' + email);
-                    debugLog('Password length: ' + password.length);
-                    
-                    loginBtn.disabled = true;
-                    loginBtn.textContent = 'Logging in...';
-                    errorDiv.style.display = 'none';
-                    successDiv.style.display = 'none';
-                    
-                    try {
-                        debugLog('Sending request to /api/auth/login');
-                        
-                        const response = await fetch('/api/auth/login', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Accept': 'application/json'
-                            },
-                            body: JSON.stringify({email: email, password: password})
-                        });
-                        
-                        debugLog('Response status: ' + response.status);
-                        
-                        const data = await response.json();
-                        debugLog('Response data: ' + JSON.stringify(data));
-                        
-                        if (response.ok && data.access_token) {
-                            debugLog('Login successful! Token received');
-                            
-                            // Store token in localStorage
-                            localStorage.setItem('access_token', data.access_token);
-                            debugLog('Token stored in localStorage');
-                            
-                            // Store token in cookie
-                            const maxAge = 86400; // 24 hours
-                            document.cookie = `access_token=${data.access_token}; path=/; max-age=${maxAge}; SameSite=Lax`;
-                            debugLog('Token stored in cookie');
-                            
-                            // Show success message
-                            successDiv.textContent = '✓ Login successful! Redirecting...';
-                            successDiv.style.display = 'block';
-                            
-                            // Wait a moment then redirect
-                            setTimeout(() => {
-                                debugLog('Redirecting to portal...');
-                                window.location.href = '/api/admin/portal';
-                            }, 1000);
-                        } else {
-                            throw new Error(data.detail || 'Login failed');
-                        }
-                    } catch (error) {
-                        debugLog('ERROR: ' + error.message);
-                        console.error('Login error:', error);
-                        errorDiv.textContent = '✗ ' + (error.message || 'Login failed. Check credentials.');
-                        errorDiv.style.display = 'block';
-                        loginBtn.disabled = false;
-                        loginBtn.textContent = 'Login';
+                if (attendees.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: rgba(255,255,255,0.5);">No attendees found.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = attendees.map(a => `
+                    <tr>
+                        <td>${a.id}</td>
+                        <td>${a.name}</td>
+                        <td>${a.email}</td>
+                        <td><span class="status-badge status-${a.status}">${a.status}</span></td>
+                        <td>${a.invite_code || 'N/A'}</td>
+                        <td><button class="delete-btn" onclick="deleteAttendee(${a.id}, '${a.email}')">Delete</button></td>
+                    </tr>
+                `).join('');
+            }
+
+            function searchAttendees() {
+                const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+                const filtered = allAttendees.filter(a => 
+                    a.name.toLowerCase().includes(searchTerm) || 
+                    a.email.toLowerCase().includes(searchTerm)
+                );
+                displayAttendees(filtered);
+            }
+
+            async function deleteAttendee(id, email) {
+                if (!confirm(`Delete ${email}?`)) return;
+
+                try {
+                    const response = await fetch(`/api/admin/attendees/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    if (response.ok) {
+                        alert('Attendee deleted successfully');
+                        loadAttendees();
+                    } else {
+                        throw new Error('Failed to delete');
                     }
-                });
-                
-                debugLog('Event listener attached successfully');
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                }
             }
             
-            // Check if already logged in
-            window.addEventListener('DOMContentLoaded', () => {
-                const token = localStorage.getItem('access_token');
-                if (token) {
-                    debugLog('Token found in storage, redirecting...');
-                    window.location.href = '/api/admin/portal';
-                } else {
-                    debugLog('No token found, showing login form');
+            // CSV Upload
+            const csvFile = document.getElementById('csvFile');
+            const uploadForm = document.getElementById('uploadForm');
+            const dropArea = document.getElementById('dropArea');
+            
+            csvFile.addEventListener('change', function(e) {
+                const fileName = e.target.files[0]?.name;
+                const fileSelected = document.getElementById('fileSelected');
+                if (fileName) {
+                    fileSelected.textContent = `Selected: ${fileName}`;
+                    fileSelected.style.display = 'block';
                 }
             });
+            
+            // Drag and drop
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, () => {
+                    dropArea.classList.add('dragover');
+                }, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, () => {
+                    dropArea.classList.remove('dragover');
+                }, false);
+            });
+            
+            dropArea.addEventListener('drop', function(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                csvFile.files = files;
+                
+                const fileName = files[0]?.name;
+                const fileSelected = document.getElementById('fileSelected');
+                if (fileName) {
+                    fileSelected.textContent = `Selected: ${fileName}`;
+                    fileSelected.style.display = 'block';
+                }
+            });
+            
+            uploadForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                if (!csvFile.files[0]) {
+                    showStatus('Please select a file', 'error');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', csvFile.files[0]);
+
+                showStatus('Uploading and processing...', 'processing');
+                document.getElementById('resultsSection').classList.remove('show');
+
+                try {
+                    const response = await fetch('/api/admin/upload-csv', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        if (data.success_count === 0) {
+                            showStatus('⚠️ No new attendees added (all were duplicates)', 'error');
+                        } else {
+                            showStatus(`✅ Success! ${data.success_count} attendees added, ${data.skipped_count} skipped.`, 'success');
+                            displayResults(data);
+                        }
+                    } else {
+                        showStatus(data.detail || 'Upload failed', 'error');
+                    }
+                } catch (error) {
+                    showStatus('Network error: ' + error.message, 'error');
+                }
+            });
+            
+            function showStatus(message, type) {
+                const statusDiv = document.getElementById('status');
+                statusDiv.className = `status ${type}`;
+                if (type === 'processing') {
+                    statusDiv.innerHTML = '<div class="spinner"></div>' + message;
+                } else {
+                    statusDiv.textContent = message;
+                }
+                statusDiv.style.display = type === 'processing' ? 'flex' : 'block';
+            }
+            
+            function displayResults(data) {
+                document.getElementById('successCount').textContent = data.success_count;
+                document.getElementById('skippedCount').textContent = data.skipped_count;
+                
+                const inviteList = document.getElementById('inviteList');
+                const baseUrl = window.location.origin;
+                
+                if (data.results && data.results.length > 0) {
+                    inviteList.innerHTML = data.results.map(r => {
+                        const link = `${baseUrl}/register?code=${r.invite_code}`;
+                        return `
+                            <div class="invite-item">
+                                <div class="invite-name">${r.name}</div>
+                                <div class="invite-email">${r.email}</div>
+                                <div class="invite-link">
+                                    <input type="text" value="${link}" readonly onclick="this.select()">
+                                    <button class="copy-btn" onclick="copyToClipboard('${link}', this)">Copy</button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    document.getElementById('resultsSection').classList.add('show');
+                }
+                
+                // Reset form
+                csvFile.value = '';
+                document.getElementById('fileSelected').style.display = 'none';
+            }
+            
+            function copyToClipboard(text, button) {
+                navigator.clipboard.writeText(text).then(() => {
+                    const originalText = button.textContent;
+                    button.textContent = 'Copied!';
+                    button.style.background = 'rgba(34, 197, 94, 0.2)';
+                    button.style.color = '#22c55e';
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                        button.style.background = '';
+                        button.style.color = '';
+                    }, 2000);
+                });
+            }
+            
+            function downloadTemplate() {
+                const csv = 'email,name\\njohn@example.com,John Doe\\njane@example.com,Jane Smith';
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'attendees_template.csv';
+                a.click();
+                window.URL.revokeObjectURL(url);
+            }
+            
+            // Load attendees on page load
+            loadAttendees();
         </script>
     </body>
     </html>
     """)
-
-@router.get("/{filename:path}")
-async def admin_portal_static(filename: str):
-    """Serve static files for admin portal"""
-    if ".." in filename or filename.startswith("/"):
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    file_path = ADMIN_PORTAL_DIR / filename
-    
-    if file_path.exists() and file_path.is_file():
-        return FileResponse(file_path)
-    
-    raise HTTPException(status_code=404, detail="File not found")
