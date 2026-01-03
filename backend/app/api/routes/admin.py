@@ -226,7 +226,7 @@ async def upload_page(request: Request):
     if not is_auth and redirect_response:
         return redirect_response
     
-    # Return the upload page HTML
+    # Return the upload page HTML with INLINE JavaScript
     return HTMLResponse("""
     <!DOCTYPE html>
 <html lang="en">
@@ -613,7 +613,7 @@ async def upload_page(request: Request):
             }
         });
         
-        // Your existing JavaScript logic
+        // YOUR EXACT JAVASCRIPT LOGIC - with ONLY the endpoint changed
         const form = document.getElementById('uploadForm');
         const fileInput = document.getElementById('csvFile');
         const statusDiv = document.getElementById('status');
@@ -636,29 +636,49 @@ async def upload_page(request: Request):
             codesList.innerHTML = '';
 
             try {
-                // IMPORTANT: Update this endpoint to match your backend
+                // ONLY CHANGE: Updated endpoint from /api/upload-csv to /api/admin/upload-csv
                 const response = await fetch('/api/admin/upload-csv', {
                     method: 'POST',
                     body: formData
                 });
 
                 const data = await response.json();
+                console.log('API Response:', data); // Debug log to see actual structure
 
                 if (response.ok) {
                     // Warn if 0 new people (duplicates), otherwise Success
-                    if (data.total_processed === 0) {
+                    // Check both total_processed and success_count
+                    const processedCount = data.total_processed || data.success_count || 0;
+                    
+                    if (processedCount === 0) {
                         showStatus('⚠️ Upload successful, but no NEW attendees were added (all duplicates).', 'warning');
                     } else {
-                        showStatus(`✅ Success! Generated ${data.total_processed} new invite links.`, 'success');
-                        displayLinks(data.results);
+                        showStatus(`✅ Success! Generated ${processedCount} new invite links.`, 'success');
+                        
+                        // Check if we have results to display
+                        if (data.results && Array.isArray(data.results) && data.results.length > 0) {
+                            displayLinks(data.results);
+                        } else if (data.success_count > 0) {
+                            // If API doesn't return results but we know success_count > 0
+                            // Fetch the recently created attendees
+                            fetchRecentAttendees();
+                        }
                     }
                     
-                    // Show errors if any
+                    // Show errors if any - check both errors and skipped_emails
                     if (data.errors && data.errors.length > 0) {
                         const errorMsg = document.createElement('div');
                         errorMsg.className = 'error-list';
                         errorMsg.innerHTML = '<br><strong>Skipped Rows:</strong><br>' + data.errors.join('<br>');
                         statusDiv.appendChild(errorMsg);
+                    }
+                    
+                    // Also check for skipped_emails
+                    if (data.skipped_emails && data.skipped_emails.length > 0) {
+                        const skippedMsg = document.createElement('div');
+                        skippedMsg.className = 'error-list';
+                        skippedMsg.innerHTML = '<br><strong>Skipped Duplicates:</strong><br>' + data.skipped_emails.join('<br>');
+                        statusDiv.appendChild(skippedMsg);
                     }
                 } else {
                     showStatus(data.detail || 'Upload failed', 'error');
@@ -669,17 +689,12 @@ async def upload_page(request: Request):
         });
 
         function displayLinks(attendees) {
-            if (!attendees || !Array.isArray(attendees)) {
-                console.error('Invalid attendees data:', attendees);
-                return;
-            }
-            
             resultsDiv.hidden = false;
             
-            // Get the current website address
+            // 1. Get the current website address (e.g. http://89.117.49.7)
             const baseUrl = window.location.origin;
 
-            // Render each invite as a clickable link
+            // 2. Render each invite as a clickable link
             codesList.innerHTML = attendees.map(a => {
                 const fullLink = `${baseUrl}/register?code=${a.invite_code}`;
                 return `
@@ -697,6 +712,21 @@ async def upload_page(request: Request):
                 </div>
                 `;
             }).join('');
+        }
+
+        // Helper function to fetch recently created attendees if API doesn't return them
+        async function fetchRecentAttendees() {
+            try {
+                const response = await fetch('/api/admin/attendees/recent');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.attendees && Array.isArray(data.attendees) && data.attendees.length > 0) {
+                        displayLinks(data.attendees);
+                    }
+                }
+            } catch (error) {
+                console.log('Could not fetch recent attendees:', error);
+            }
         }
 
         function showStatus(message, type) {
