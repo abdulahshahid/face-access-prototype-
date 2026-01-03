@@ -2290,6 +2290,8 @@ async def admin_portal_login():
     </body>
     </html>
     """)
+
+
 @router.get("/portal/attendees", response_class=HTMLResponse)
 async def attendees_management(request: Request):
     """Serve the attendees management page"""
@@ -2746,47 +2748,20 @@ async def attendees_management(request: Request):
         }
         
         @media (max-width: 768px) {
-            .container {
-                padding: 24px 16px;
-            }
-            
-            .header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .search-box {
-                max-width: 100%;
-            }
-            
-            th, td {
-                padding: 12px 16px;
-            }
-            
-            .action-buttons {
-                flex-direction: column;
-            }
-            
-            .modal {
-                padding: 24px;
-                width: 95%;
-            }
+            .container { padding: 24px 16px; }
+            .header { flex-direction: column; align-items: stretch; }
+            .search-box { max-width: 100%; }
+            th, td { padding: 12px 16px; }
+            .action-buttons { flex-direction: column; }
+            .modal { padding: 24px; width: 95%; }
         }
         
-        /* Hide table on mobile, show cards instead */
         @media (max-width: 1024px) {
-            .table-container {
-                display: none;
-            }
-            
-            .mobile-cards {
-                display: block;
-            }
+            .table-container { display: none; }
+            .mobile-cards { display: block; }
         }
         
-        .mobile-cards {
-            display: none;
-        }
+        .mobile-cards { display: none; }
         
         .mobile-card {
             background: rgba(255, 255, 255, 0.03);
@@ -2829,9 +2804,7 @@ async def attendees_management(request: Request):
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
         
-        .mobile-detail:last-child {
-            border-bottom: none;
-        }
+        .mobile-detail:last-child { border-bottom: none; }
         
         .mobile-detail-label {
             color: rgba(255, 255, 255, 0.6);
@@ -2848,9 +2821,7 @@ async def attendees_management(request: Request):
             gap: 8px;
         }
         
-        .mobile-card-actions button {
-            flex: 1;
-        }
+        .mobile-card-actions button { flex: 1; }
     </style>
 </head>
 <body>
@@ -2858,17 +2829,14 @@ async def attendees_management(request: Request):
     
     <div class="container">
         <a href="/api/admin/portal" class="back-link">
-            <i class="fas fa-arrow-left"></i>
-            Back to Admin Portal
+            <i class="fas fa-arrow-left"></i> Back to Admin Portal
         </a>
         
         <div class="header">
             <h1><i class="fas fa-users"></i> Attendees Management</h1>
             <div class="search-box">
                 <input type="text" id="searchInput" placeholder="Search by name or email...">
-                <button id="searchBtn">
-                    <i class="fas fa-search"></i> Search
-                </button>
+                <button id="searchBtn"><i class="fas fa-search"></i> Search</button>
             </div>
         </div>
         
@@ -2891,7 +2859,6 @@ async def attendees_management(request: Request):
             </div>
         </div>
         
-        <!-- Desktop Table -->
         <div class="table-container">
             <table id="attendeesTable">
                 <thead>
@@ -2914,35 +2881,26 @@ async def attendees_management(request: Request):
             </table>
         </div>
         
-        <!-- Mobile Cards -->
         <div class="mobile-cards" id="mobileCards"></div>
         
         <div class="pagination">
-            <button id="prevBtn" disabled>
-                <i class="fas fa-chevron-left"></i> Previous
-            </button>
+            <button id="prevBtn" disabled><i class="fas fa-chevron-left"></i> Previous</button>
             <span class="page-info">Page <span id="currentPage">1</span></span>
-            <button id="nextBtn" disabled>
-                Next <i class="fas fa-chevron-right"></i>
-            </button>
+            <button id="nextBtn" disabled>Next <i class="fas fa-chevron-right"></i></button>
         </div>
     </div>
     
-    <!-- Delete Confirmation Modal -->
     <div class="modal-overlay" id="deleteModal">
         <div class="modal">
             <h2><i class="fas fa-exclamation-triangle"></i> Delete Attendee</h2>
-            <p id="deleteMessage">Are you sure you want to delete this attendee? This action cannot be undone.</p>
+            <p id="deleteMessage">Are you sure you want to delete this attendee?</p>
             <div class="modal-buttons">
                 <button class="modal-btn modal-cancel" id="cancelDelete">Cancel</button>
-                <button class="modal-btn modal-confirm" id="confirmDelete">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
+                <button class="modal-btn modal-confirm" id="confirmDelete"><i class="fas fa-trash"></i> Delete</button>
             </div>
         </div>
     </div>
     
-    <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
     
     <script>
@@ -2951,7 +2909,6 @@ async def attendees_management(request: Request):
         let currentAttendeeToDelete = null;
         const limit = 20;
         
-        // DOM Elements
         const attendeesBody = document.getElementById('attendeesBody');
         const mobileCards = document.getElementById('mobileCards');
         const searchInput = document.getElementById('searchInput');
@@ -2969,25 +2926,22 @@ async def attendees_management(request: Request):
         const confirmDeleteBtn = document.getElementById('confirmDelete');
         const toast = document.getElementById('toast');
         
-        // Load attendees on page load
         document.addEventListener('DOMContentLoaded', loadAttendees);
         
-        // Search functionality
         searchBtn.addEventListener('click', () => {
-            currentSearch = searchInput.value;
+            currentSearch = searchInput.value.trim();
             currentPage = 1;
             loadAttendees();
         });
         
         searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                currentSearch = searchInput.value;
+                currentSearch = searchInput.value.trim();
                 currentPage = 1;
                 loadAttendees();
             }
         });
         
-        // Pagination
         prevBtn.addEventListener('click', () => {
             if (currentPage > 1) {
                 currentPage--;
@@ -3000,7 +2954,6 @@ async def attendees_management(request: Request):
             loadAttendees();
         });
         
-        // Modal handlers
         cancelDeleteBtn.addEventListener('click', () => {
             deleteModal.classList.remove('show');
             currentAttendeeToDelete = null;
@@ -3008,7 +2961,6 @@ async def attendees_management(request: Request):
         
         confirmDeleteBtn.addEventListener('click', deleteAttendee);
         
-        // Close modal on overlay click
         deleteModal.addEventListener('click', (e) => {
             if (e.target === deleteModal) {
                 deleteModal.classList.remove('show');
@@ -3018,82 +2970,38 @@ async def attendees_management(request: Request):
         
         async function loadAttendees() {
             try {
-                // Show loading
-                attendeesBody.innerHTML = `
-                    <tr>
-                        <td colspan="5" class="loading">
-                            <div class="spinner"></div>
-                            <p>Loading attendees...</p>
-                        </td>
-                    </tr>
-                `;
+                attendeesBody.innerHTML = `<tr><td colspan="5" class="loading"><div class="spinner"></div><p>Loading attendees...</p></td></tr>`;
+                mobileCards.innerHTML = `<div class="loading"><div class="spinner"></div><p>Loading attendees...</p></div>`;
                 
-                mobileCards.innerHTML = `
-                    <div class="loading">
-                        <div class="spinner"></div>
-                        <p>Loading attendees...</p>
-                    </div>
-                `;
-                
-                // Build query parameters
                 const params = new URLSearchParams({
                     skip: (currentPage - 1) * limit,
                     limit: limit.toString()
                 });
-                
-                if (currentSearch) {
-                    params.append('search', currentSearch);
-                }
+                if (currentSearch) params.append('search', currentSearch);
                 
                 const response = await fetch(`/api/admin/attendees?${params}`);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 
                 const attendees = await response.json();
                 
-                // Update stats
                 updateStats(attendees);
-                
-                // Update pagination
                 updatePagination(attendees.length);
-                
-                // Update table
                 renderAttendeesTable(attendees);
-                
-                // Update mobile cards
                 renderAttendeesCards(attendees);
                 
             } catch (error) {
                 console.error('Error loading attendees:', error);
-                attendeesBody.innerHTML = `
-                    <tr>
-                        <td colspan="5" class="no-data">
-                            <i class="fas fa-exclamation-circle"></i>
-                            <p>Error loading attendees. Please try again.</p>
-                        </td>
-                    </tr>
-                `;
-                
-                mobileCards.innerHTML = `
-                    <div class="no-data">
-                        <i class="fas fa-exclamation-circle"></i>
-                        <p>Error loading attendees. Please try again.</p>
-                    </div>
-                `;
-                
+                attendeesBody.innerHTML = `<tr><td colspan="5" class="no-data"><i class="fas fa-exclamation-circle"></i><p>Error loading attendees.</p></td></tr>`;
+                mobileCards.innerHTML = `<div class="no-data"><i class="fas fa-exclamation-circle"></i><p>Error loading attendees.</p></div>`;
                 showToast('Error loading attendees', 'error');
             }
         }
         
         function updateStats(attendees) {
             totalCountEl.textContent = attendees.length;
-            
             const pending = attendees.filter(a => a.status === 'pending').length;
             const registered = attendees.filter(a => a.status === 'registered').length;
             const verified = attendees.filter(a => a.status === 'verified').length;
-            
             pendingCountEl.textContent = pending;
             registeredCountEl.textContent = registered;
             verifiedCountEl.textContent = verified;
@@ -3101,47 +3009,105 @@ async def attendees_management(request: Request):
         
         function updatePagination(itemsCount) {
             currentPageSpan.textContent = currentPage;
-            
-            // Disable previous button on first page
             prevBtn.disabled = currentPage === 1;
-            
-            // Disable next button if we have fewer items than limit
             nextBtn.disabled = itemsCount < limit;
         }
         
-        const deleteButton = attendee.id 
-    ? `<button class="action-btn delete-btn" onclick="showDeleteModal(${attendee.id}, '${attendee.name.replace(/'/g, "\\'")}', '${attendee.email.replace(/'/g, "\\'")}')">
-         <i class="fas fa-trash"></i> Delete
-       </button>`
-    : `<span class="action-btn" style="opacity:0.5;cursor:not-allowed;padding:8px 16px;">No ID</span>`;
-
-return `
-    <tr data-id="${attendee.id || ''}">
-        ...
-        <td>
-            <div class="action-buttons">
-                <button class="action-btn copy-btn" onclick="copyInviteLink('${inviteLink.replace(/'/g, "\\'")}')">
-                    <i class="fas fa-copy"></i> Copy
-                </button>
-                ${deleteButton}
-            </div>
-        </td>
-    </tr>
-`;
+        function renderAttendeesTable(attendees) {
+            if (attendees.length === 0) {
+                attendeesBody.innerHTML = `<tr><td colspan="5" class="no-data"><i class="fas fa-users-slash"></i><p>No attendees found${currentSearch ? ' matching your search' : ''}.</p></td></tr>`;
+                return;
+            }
+            
+            const rows = attendees.map(attendee => {
+                const createdDate = new Date(attendee.created_at).toLocaleDateString('en-US', {
+                    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+                const statusClass = getStatusClass(attendee.status);
+                const statusText = getStatusText(attendee.status);
+                const baseUrl = window.location.origin;
+                const inviteLink = `${baseUrl}/register?code=${attendee.invite_code}`;
+                
+                const deleteButton = attendee.id ? 
+                    `<button class="action-btn delete-btn" onclick="showDeleteModal(${attendee.id}, '${(attendee.name || '').replace(/'/g, "\\'")}', '${(attendee.email || '').replace(/'/g, "\\'")}')">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>` :
+                    `<span class="action-btn" style="opacity:0.5;cursor:not-allowed;padding:8px 16px;">Delete</span>`;
+                
+                return `
+                    <tr data-id="${attendee.id || ''}">
+                        <td>
+                            <div class="attendee-name">${attendee.name || 'N/A'}</div>
+                            <div class="attendee-email">${attendee.email || 'N/A'}</div>
+                        </td>
+                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                        <td><div class="invite-code" title="${inviteLink}">${attendee.invite_code}</div></td>
+                        <td>${createdDate}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-btn copy-btn" onclick="copyInviteLink('${inviteLink.replace(/'/g, "\\'")}')">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                                ${deleteButton}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            attendeesBody.innerHTML = rows;
+        }
         
-        const deleteButton = attendee.id 
-    ? `<button class="action-btn delete-btn" onclick="showDeleteModal(${attendee.id}, '${attendee.name.replace(/'/g, "\\'")}', '${attendee.email.replace(/'/g, "\\'")}')">
-         <i class="fas fa-trash"></i> Delete
-       </button>`
-    : `<button class="action-btn" disabled style="opacity:0.5;">Delete</button>`;
-
-...
-<div class="mobile-card-actions">
-    <button class="action-btn copy-btn" onclick="copyInviteLink('${inviteLink.replace(/'/g, "\\'")}')">
-        <i class="fas fa-copy"></i> Copy Link
-    </button>
-    ${deleteButton}
-</div>
+        function renderAttendeesCards(attendees) {
+            if (attendees.length === 0) {
+                mobileCards.innerHTML = `<div class="no-data"><i class="fas fa-users-slash"></i><p>No attendees found${currentSearch ? ' matching your search' : ''}.</p></div>`;
+                return;
+            }
+            
+            const cards = attendees.map(attendee => {
+                const createdDate = new Date(attendee.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                const statusClass = getStatusClass(attendee.status);
+                const statusText = getStatusText(attendee.status);
+                const baseUrl = window.location.origin;
+                const inviteLink = `${baseUrl}/register?code=${attendee.invite_code}`;
+                
+                const deleteButton = attendee.id ?
+                    `<button class="action-btn delete-btn" onclick="showDeleteModal(${attendee.id}, '${(attendee.name || '').replace(/'/g, "\\'")}', '${(attendee.email || '').replace(/'/g, "\\'")}')">
+                        <i class="fas fa-trash"></i> Delete
+                    </button>` :
+                    `<button class="action-btn" disabled style="opacity:0.5;">Delete</button>`;
+                
+                return `
+                    <div class="mobile-card" data-id="${attendee.id || ''}">
+                        <div class="mobile-card-header">
+                            <div class="mobile-card-info">
+                                <h4>${attendee.name || 'N/A'}</h4>
+                                <p>${attendee.email || 'N/A'}</p>
+                                <span class="status-badge ${statusClass}">${statusText}</span>
+                            </div>
+                        </div>
+                        <div class="mobile-card-details">
+                            <div class="mobile-detail">
+                                <span class="mobile-detail-label">Invite Code:</span>
+                                <span class="mobile-detail-value invite-code">${(attendee.invite_code || '').substring(0, 8)}...</span>
+                            </div>
+                            <div class="mobile-detail">
+                                <span class="mobile-detail-label">Created:</span>
+                                <span class="mobile-detail-value">${createdDate}</span>
+                            </div>
+                        </div>
+                        <div class="mobile-card-actions">
+                            <button class="action-btn copy-btn" onclick="copyInviteLink('${inviteLink.replace(/'/g, "\\'")}')">
+                                <i class="fas fa-copy"></i> Copy Link
+                            </button>
+                            ${deleteButton}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            mobileCards.innerHTML = cards;
+        }
         
         function getStatusClass(status) {
             switch (status) {
@@ -3157,27 +3123,34 @@ return `
                 case 'pending': return 'Pending';
                 case 'registered': return 'Registered';
                 case 'verified': return 'Verified';
-                default: return status;
+                default: return status || 'Unknown';
             }
         }
         
         function copyInviteLink(link) {
             navigator.clipboard.writeText(link).then(() => {
                 showToast('Invite link copied to clipboard!');
-            }).catch(err => {
-                console.error('Failed to copy:', err);
+            }).catch(() => {
                 showToast('Failed to copy link', 'error');
             });
         }
         
         function showDeleteModal(id, name, email) {
-            currentAttendeeToDelete = { id, name, email };
+            if (!id) {
+                showToast('Cannot delete: Invalid attendee ID', 'error');
+                return;
+            }
+            currentAttendeeToDelete = { id, name: name || 'Unknown', email: email || 'N/A' };
             deleteMessage.textContent = `Are you sure you want to delete attendee "${name}" (${email})? This action cannot be undone and will also remove their face data if registered.`;
             deleteModal.classList.add('show');
         }
         
         async function deleteAttendee() {
-            if (!currentAttendeeToDelete) return;
+            if (!currentAttendeeToDelete || !currentAttendeeToDelete.id) {
+                showToast('Invalid attendee selected', 'error');
+                deleteModal.classList.remove('show');
+                return;
+            }
             
             const { id, name } = currentAttendeeToDelete;
             
@@ -3185,28 +3158,17 @@ return `
                 confirmDeleteBtn.disabled = true;
                 confirmDeleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
                 
-                const response = await fetch(`/api/admin/attendees/${id}`, {
-                    method: 'DELETE'
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
+                const response = await fetch(`/api/admin/attendees/${id}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 
                 const result = await response.json();
                 
-                // Close modal
                 deleteModal.classList.remove('show');
-                
-                // Show success message
                 showToast(result.message || `Attendee "${name}" deleted successfully`);
-                
-                // Reload attendees
                 loadAttendees();
                 
             } catch (error) {
-                console.error('Error deleting attendee:', error);
-                showToast(`Failed to delete attendee: ${error.message}`, 'error');
+                showToast('Failed to delete attendee', 'error');
             } finally {
                 confirmDeleteBtn.disabled = false;
                 confirmDeleteBtn.innerHTML = '<i class="fas fa-trash"></i> Delete';
@@ -3217,12 +3179,8 @@ return `
         function showToast(message, type = 'success') {
             toast.textContent = message;
             toast.className = 'toast';
-            toast.classList.add(type);
-            toast.classList.add('show');
-            
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
+            toast.classList.add(type, 'show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
         }
     </script>
 </body>
