@@ -12,7 +12,7 @@ router = APIRouter()
 # Load admin credentials from environment
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@example.com")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
-
+print(f"Admin Email: {ADMIN_EMAIL}, Admin Password: {ADMIN_PASSWORD}")
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
