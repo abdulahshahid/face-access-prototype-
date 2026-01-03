@@ -4,6 +4,7 @@ import logging
 from typing import List, Optional
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, status
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 # --- 1. Imports from your Project Structure ---
