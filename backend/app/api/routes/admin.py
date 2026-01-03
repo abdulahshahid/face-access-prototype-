@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # 1. LIST ATTENDEES (With Search & Pagination)
 # ==============================================================================
 
-from core.security import decode_token
+from core.security import verify_access_token
 
 def check_auth_and_redirect(request: Request):
     """Check if user is authenticated, return (is_authenticated, redirect_response_or_none)"""
@@ -41,7 +41,7 @@ def check_auth_and_redirect(request: Request):
     
     if token:
         try:
-            payload = decode_token(token)
+            payload = verify_access_token(token)
             if payload:
                 return True, None  # Authenticated, no redirect needed
         except:
