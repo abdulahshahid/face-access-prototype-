@@ -618,49 +618,51 @@ async def upload_page(request: Request):
         const codesList = document.getElementById('codesList');
 
         form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            if (!fileInput.files[0]) {
-                showStatus('Please select a file', 'error');
-                return;
-            }
+    e.preventDefault();
+    
+    if (!fileInput.files[0]) {
+        showStatus('Please select a file', 'error');
+        return;
+    }
 
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
 
-            showStatus('Uploading and processing CSV...', 'processing');
-            resultsDiv.hidden = true;
-            codesList.innerHTML = '';
+    showStatus('Uploading...', 'processing');
+    resultsDiv.hidden = true;
+    codesList.innerHTML = '';
 
-            try {
-                const response = await fetch('/api/admin/upload-csv', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    if (data.total_processed === 0) {
-                        showStatus('⚠️ Upload successful, but no NEW attendees were added (all duplicates).', 'warning');
-                    } else {
-                        showStatus(`✅ Success! Generated ${data.total_processed} new invite links.`, 'success');
-                        displayLinks(data.results);
-                    }
-                    
-                    if (data.errors && data.errors.length > 0) {
-                        const errorMsg = document.createElement('div');
-                        errorMsg.className = 'error-list';
-                        errorMsg.innerHTML = '<br><strong>Skipped Rows:</strong><br>' + data.errors.join('<br>');
-                        statusDiv.appendChild(errorMsg);
-                    }
-                } else {
-                    showStatus(data.detail || 'Upload failed', 'error');
-                }
-            } catch (error) {
-                showStatus('Network error: ' + error.message, 'error');
-            }
+    try {
+        const response = await fetch('/api/upload-csv', {
+            method: 'POST',
+            body: formData
         });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            // Warn if 0 new people (duplicates), otherwise Success
+            if (data.total_processed === 0) {
+                showStatus('⚠️ Upload successful, but no NEW attendees were added (all duplicates).', 'warning');
+            } else {
+                showStatus(`✅ Success! Generated ${data.total_processed} new invite links.`, 'success');
+                displayLinks(data.results);
+            }
+            
+            // Show errors if any
+            if (data.errors && data.errors.length > 0) {
+                const errorMsg = document.createElement('div');
+                errorMsg.className = 'error-list';
+                errorMsg.innerHTML = '<br><strong>Skipped Rows:</strong><br>' + data.errors.join('<br>');
+                statusDiv.appendChild(errorMsg);
+            }
+        } else {
+            showStatus(data.detail || 'Upload failed', 'error');
+        }
+    } catch (error) {
+        showStatus('Network error: ' + error.message, 'error');
+    }
+});
 
         function showStatus(message, type) {
             statusDiv.className = `status ${type}`;
