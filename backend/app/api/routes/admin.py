@@ -216,6 +216,7 @@ async def upload_csv(
 
 BASE_DIR = Path(__file__).parent.parent.parent
 ADMIN_PORTAL_DIR = BASE_DIR / "admin-portal"
+print(f"Admin Portal Directory: {ADMIN_PORTAL_DIR} {BASE_DIR}")
 ADMIN_PORTAL_DIR.mkdir(exist_ok=True)
 
 @router.get("/portal", response_class=HTMLResponse)
