@@ -13,7 +13,7 @@ from models.attendee import Attendee
 from core.deps import get_current_admin
 from core.security import generate_invite_code, verify_access_token
 from core.qdrant_ops import qdrant_service
-from schemas import AttendeeResult, BatchUploadResponse, GenerateQRCodesRequest
+from schemas import AttendeeResult, BatchUploadResponse, GenerateQRCodesRequest, QRVerificationRequest
 from fastapi import Request, Depends, HTTPException, status
 from jose import JWTError
 
@@ -164,7 +164,7 @@ async def upload_csv(
     file: UploadFile = File(...), 
     db: Session = Depends(get_db)
 ):
-    """Bulk import users via CSV"""
+    """Bulk import users via CSV - checks for existing authentication methods"""
     is_auth, redirect_response = check_auth_and_redirect(request)
     if not is_auth:
         return redirect_response
@@ -174,7 +174,7 @@ async def upload_csv(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail="Invalid file format. Please upload a .csv file."
         )
-
+    
     try:
         content = await file.read()
         decoded_content = content.decode('utf-8')
@@ -189,32 +189,45 @@ async def upload_csv(
              status_code=400, 
              detail=f"CSV is missing required 'email' column. Found: {headers}"
          )
-
+    
     new_attendees = []
     skipped_emails = []
-    results = []  # Add this to store created attendee data
+    results = []
     
     for row in csv_reader:
         clean_row = {k.lower().strip(): v.strip() for k, v in row.items() if k}
         
         email = clean_row.get('email')
         name = clean_row.get('name', 'Unknown')
-
+        
         if not email:
             continue
-
+        
+        # Check if attendee already exists
         existing = db.query(Attendee).filter(Attendee.email == email).first()
         if existing:
             skipped_emails.append(email)
             continue
-
+        
+        # Generate invite code
         invite_code = generate_invite_code()
+        
+        # Create new attendee with default auth settings
         attendee = Attendee(
             name=name,
             email=email,
             invite_code=invite_code,
-            status="pending"
+            status="pending",
+            # Set default authentication state
+            has_biometric=False,
+            qr_enabled=False,  # No auth method enabled yet
+            qr_code_data=None,
+            qr_image_url=None,
+            face_embedding_id=None,
+            access_method=None,
+            last_access_at=None
         )
+        
         db.add(attendee)
         new_attendees.append(attendee)
         
@@ -224,18 +237,21 @@ async def upload_csv(
             "email": email,
             "invite_code": invite_code
         })
-
+    
     try:
         db.commit()
-        logger.info(f"✅ [Admin] Batch Import: {len(new_attendees)} created, {len(skipped_emails)} skipped")
+        logger.info(
+            f"✅ [Admin] Batch Import: {len(new_attendees)} created, "
+            f"{len(skipped_emails)} skipped (already exist)"
+        )
         
-        # Return the results array so frontend can display links
         return {
             "total_processed": len(new_attendees) + len(skipped_emails), 
             "success_count": len(new_attendees),
             "skipped_emails": skipped_emails,
-            "results": results  # CRITICAL: Add this line
+            "results": results
         }
+        
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Batch Upload Commit Failed: {e}")
@@ -3667,19 +3683,18 @@ async def generate_qr_codes_api(
     data: GenerateQRCodesRequest,
     db: Session = Depends(get_db)
 ):
-    """Generate QR codes for multiple emails"""
+    """Generate QR codes for multiple emails - only if biometric not registered"""
     is_auth, redirect_response = check_auth_and_redirect(request)
     if not is_auth:
         return redirect_response
-
-    # Extract and clean emails directly from the validated model
+    
     emails = [email.strip().lower() for email in data.emails if email.strip()]
-
+    
     if not emails:
         return {"success": False, "message": "No valid emails provided"}
-
+    
     results = []
-
+    
     try:
         for email in emails:
             attendee = db.query(Attendee).filter(Attendee.email == email).first()
@@ -3691,12 +3706,25 @@ async def generate_qr_codes_api(
                     "message": "Attendee not found"
                 })
                 continue
-
+            
+            # CHECK: If biometric already registered, deny QR generation
+            if attendee.has_biometric:
+                results.append({
+                    "email": email,
+                    "name": attendee.name,
+                    "success": False,
+                    "qr_generated": False,
+                    "message": "User already has biometric registered. Cannot generate QR code.",
+                    "has_biometric": True,
+                    "qr_enabled": False
+                })
+                continue
+            
             # Generate unique QR data if missing
             if not attendee.qr_code_data:
                 import uuid
                 attendee.qr_code_data = f"USER:{attendee.id}:TOKEN:{str(uuid.uuid4())}"
-
+            
             # Generate QR image
             qr = qrcode.QRCode(
                 version=1,
@@ -3706,36 +3734,43 @@ async def generate_qr_codes_api(
             )
             qr.add_data(attendee.qr_code_data)
             qr.make(fit=True)
+            
             img = qr.make_image(fill_color="black", back_color="white")
-
+            
             buffer = io.BytesIO()
             img.save(buffer, format='PNG')
             buffer.seek(0)
-
+            
             import base64
             img_str = base64.b64encode(buffer.read()).decode()
             qr_data_url = f"data:image/png;base64,{img_str}"
-
-            attendee.qr_image_url = qr_data_url  # optional: save if you want persistence
-
+            
+            attendee.qr_image_url = qr_data_url
+            attendee.qr_enabled = True
+            attendee.has_biometric = False  # Explicitly set to False
+            
             results.append({
                 "email": email,
                 "name": attendee.name,
                 "qr_generated": True,
                 "qr_url": qr_data_url,
-                "has_biometric": getattr(attendee, "has_biometric", False),
-                "qr_enabled": getattr(attendee, "qr_enabled", True),
+                "has_biometric": False,
+                "qr_enabled": True,
+                "message": "QR code generated successfully"
             })
-
+        
         db.commit()
-
+        
+        success_count = len([r for r in results if r.get("qr_generated")])
+        
         return {
             "success": True,
             "results": results,
             "count": len(results),
-            "message": f"Successfully generated QR codes for {len(results)} attendees"
+            "success_count": success_count,
+            "message": f"Successfully generated QR codes for {success_count} attendees"
         }
-
+        
     except Exception as e:
         db.rollback()
         raise HTTPException(
@@ -3770,6 +3805,76 @@ async def get_qr_image(attendee_id: int):
         
     finally:
         db.close()
+
+@router.post("/verify-qr")
+async def verify_qr_code(
+    data: QRVerificationRequest,
+    db: Session = Depends(get_db)
+):
+    """Verify QR code for access - only if biometric not registered"""
+    
+    try:
+        # Find attendee by QR code data
+        attendee = db.query(Attendee).filter(
+            Attendee.qr_code_data == data.qr_data
+        ).first()
+        
+        if not attendee:
+            return {
+                "success": False,
+                "access_granted": False,
+                "message": "Invalid QR code"
+            }
+        
+        # CHECK: If user has biometric, force them to use face recognition
+        if attendee.has_biometric:
+            return {
+                "success": False,
+                "access_granted": False,
+                "message": "Biometric authentication required. QR code disabled.",
+                "attendee": {
+                    "name": attendee.name,
+                    "email": attendee.email,
+                    "has_biometric": True
+                }
+            }
+        
+        # CHECK: If QR is disabled
+        if not attendee.qr_enabled:
+            return {
+                "success": False,
+                "access_granted": False,
+                "message": "QR code access is disabled for this user"
+            }
+        
+        # Grant access and log
+        from datetime import datetime
+        attendee.last_access_at = datetime.utcnow()
+        attendee.access_method = "qr"
+        attendee.status = "checked_in"  # or whatever status you want
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "access_granted": True,
+            "message": "Access granted via QR code",
+            "attendee": {
+                "id": attendee.id,
+                "name": attendee.name,
+                "email": attendee.email,
+                "access_method": "qr",
+                "last_access_at": attendee.last_access_at
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"QR verification error: {str(e)}"
+        )
+
 
 @router.get("/{filename:path}")
 async def admin_portal_static(filename: str):

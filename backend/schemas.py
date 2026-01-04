@@ -34,3 +34,7 @@ class BatchUploadResponse(BaseModel):
 
 class GenerateQRCodesRequest(BaseModel):
     emails: List[str]
+
+
+class QRVerificationRequest(BaseModel):
+    qr_data: str  # The scanned QR code data
