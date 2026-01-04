@@ -3629,8 +3629,8 @@ async def upload_qr_page(request: Request):
             
             try {
                 // Note: Make sure the endpoint matches your API
-                // The HTML form says /api/admin/upload-csv-qr but your router is /upload-csv-qr
-                const response = await fetch('/upload-csv-qr', {
+                // The HTML form says /api/admin/upload-csv-qr but your router is 
+                const response = await fetch('//api/admin/upload-csv-qr', {
                     method: 'POST',
                     body: formData
                 });
