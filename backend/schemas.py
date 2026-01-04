@@ -14,16 +14,20 @@ class AttendeeResult(BaseModel):
     name: str
     email: str
     dni: Optional[str] = None
-    invite_code: str  # This requires invite_code
+    invite_code: Optional[str] = None  # Make this optional since QR users don't have invite codes
     status: str
     created_at: datetime
+    qr_enabled: Optional[bool] = None
+    has_biometric: Optional[bool] = None
+    last_access_at: Optional[datetime] = None
+    access_method: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 class BatchAttendeeResult(BaseModel):
     name: str
     email: str
-    invite_code: str  # This also requires invite_code
+    invite_code: Optional[str] = None  # Make this optional too
 
 # This model should NOT inherit from AttendeeResult
 class BatchQRResult(BaseModel):
