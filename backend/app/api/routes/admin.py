@@ -20,7 +20,7 @@ from models.attendee import Attendee
 from core.deps import get_current_admin
 from core.security import generate_invite_code, verify_access_token
 from core.qdrant_ops import qdrant_service
-from schemas import AttendeeResult, BatchUploadResponse, GenerateQRCodesRequest, QRVerificationRequest, BatchQRResult
+from schemas import AttendeeResult, BatchUploadResponse, GenerateQRCodesRequest, QRVerificationRequest, BatchQRResult, BatchQRUploadResponse
 from fastapi import Request, Depends, HTTPException, status
 from jose import JWTError
 
