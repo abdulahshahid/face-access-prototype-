@@ -13,12 +13,12 @@ class AttendeeResult(BaseModel):
     id: int
     name: str
     email: str
+    dni: Optional[str] = None
     invite_code: str
-    status: str  # optional but recommended
-    created_at: datetime  # optional but very useful
+    status: str
+    created_at: datetime
 
-    class Config:
-        from_attributes = True  # Important! Allows ORM mod
+    model_config = ConfigDict(from_attributes=True)
 
 class BatchAttendeeResult(BaseModel):
     name: str

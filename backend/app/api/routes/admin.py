@@ -3210,6 +3210,570 @@ async def attendees_management(request: Request):
     """)
 
 
+from fastapi import APIRouter, Request, HTTPException
+from fastapi.responses import HTMLResponse, StreamingResponse
+from sqlalchemy.orm import Session
+import qrcode
+import io
+import uuid
+from typing import List
+
+@router.get("/portal/qr-generator", response_class=HTMLResponse)
+async def qr_generator_page(request: Request):
+    """Serve the QR code generation page"""
+    is_auth, redirect_response = check_auth_and_redirect(request)
+    if not is_auth and redirect_response:
+        return redirect_response
+    
+    return HTMLResponse("""
+    <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Generator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .input-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 120px;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .hint {
+            font-size: 13px;
+            color: #888;
+            margin-top: 5px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .results {
+            margin-top: 30px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .qr-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .qr-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .qr-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transform: translateY(-5px);
+        }
+        
+        .qr-card img {
+            width: 200px;
+            height: 200px;
+            margin: 15px auto;
+            border: 3px solid #f0f0f0;
+            border-radius: 8px;
+        }
+        
+        .qr-info {
+            margin-top: 15px;
+        }
+        
+        .qr-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .qr-email {
+            font-size: 13px;
+            color: #666;
+            word-break: break-all;
+        }
+        
+        .qr-status {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-biometric {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .download-btn {
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        
+        .download-btn:hover {
+            background: #218838;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border-left: 4px solid #f5c6cb;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border-left: 4px solid #c3e6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <i class="fas fa-qrcode"></i>
+            QR Code Generator
+        </h1>
+        <p class="subtitle">Generate QR codes for attendees - one email per line</p>
+        
+        <div class="input-section">
+            <div class="input-group">
+                <label for="emails">
+                    <i class="fas fa-envelope"></i> Enter Email Addresses
+                </label>
+                <textarea id="emails" placeholder="user1@example.com
+user2@example.com
+user3@example.com"></textarea>
+                <p class="hint">Enter one email address per line</p>
+            </div>
+            
+            <div class="button-group">
+                <button class="btn-primary" onclick="generateQRCodes()">
+                    <i class="fas fa-magic"></i> Generate QR Codes
+                </button>
+                <button class="btn-secondary" onclick="downloadAllQRCodes()">
+                    <i class="fas fa-download"></i> Download All
+                </button>
+            </div>
+        </div>
+        
+        <div id="results" class="results" style="display: none;">
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalCount">0</div>
+                    <div class="stat-label">Total Processed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="successCount">0</div>
+                    <div class="stat-label">QR Generated</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="biometricCount">0</div>
+                    <div class="stat-label">Has Biometric</div>
+                </div>
+            </div>
+            
+            <div id="qrGrid" class="qr-grid"></div>
+        </div>
+        
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Generating QR codes...</p>
+        </div>
+        
+        <div id="message"></div>
+    </div>
+    
+    <script>
+        async function generateQRCodes() {
+            const emails = document.getElementById('emails').value
+                .split('\\n')
+                .map(e => e.trim())
+                .filter(e => e.length > 0);
+            
+            if (emails.length === 0) {
+                showMessage('Please enter at least one email address', 'error');
+                return;
+            }
+            
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('message').innerHTML = '';
+            
+            try {
+                const response = await fetch('/api/generate-qr-codes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ emails: emails })
+                });
+                
+                const data = await response.json();
+                
+                document.getElementById('loading').style.display = 'none';
+                
+                if (data.success) {
+                    displayResults(data.results);
+                    showMessage(`Successfully generated ${data.results.length} QR codes!`, 'success');
+                } else {
+                    showMessage(data.message || 'Failed to generate QR codes', 'error');
+                }
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                showMessage('Error: ' + error.message, 'error');
+            }
+        }
+        
+        function displayResults(results) {
+            document.getElementById('results').style.display = 'block';
+            
+            const total = results.length;
+            const success = results.filter(r => r.qr_generated).length;
+            const biometric = results.filter(r => r.has_biometric).length;
+            
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('successCount').textContent = success;
+            document.getElementById('biometricCount').textContent = biometric;
+            
+            const grid = document.getElementById('qrGrid');
+            grid.innerHTML = '';
+            
+            results.forEach(result => {
+                const card = document.createElement('div');
+                card.className = 'qr-card';
+                
+                const statusClass = result.has_biometric ? 'status-biometric' : 'status-success';
+                const statusText = result.has_biometric ? 'Biometric Enrolled' : 'QR Enabled';
+                
+                card.innerHTML = `
+                    <img src="${result.qr_url}" alt="QR Code for ${result.email}">
+                    <div class="qr-info">
+                        <div class="qr-name">${result.name || 'Unknown'}</div>
+                        <div class="qr-email">${result.email}</div>
+                        <span class="qr-status ${statusClass}">${statusText}</span>
+                    </div>
+                    <button class="download-btn" onclick="downloadQR('${result.qr_url}', '${result.email}')">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                `;
+                
+                grid.appendChild(card);
+            });
+        }
+        
+        function downloadQR(url, email) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `qr_${email}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+        
+        async function downloadAllQRCodes() {
+            showMessage('Preparing download...', 'success');
+            // Implement bulk download logic here
+        }
+        
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = type;
+            messageDiv.textContent = text;
+            messageDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
+    """)
+
+
+@router.post("/api/generate-qr-codes")
+async def generate_qr_codes_api(
+    request: Request,
+    emails: List[str] = None
+):
+    """Generate QR codes for multiple emails"""
+    is_auth, _ = check_auth_and_redirect(request)
+    if not is_auth:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    if not emails:
+        body = await request.json()
+        emails = body.get("emails", [])
+    
+    if not emails:
+        return {"success": False, "message": "No emails provided"}
+    
+    db: Session = next(get_db())
+    results = []
+    
+    try:
+        for email in emails:
+            email = email.strip().lower()
+            
+            # Find attendee
+            attendee = db.query(Attendee).filter(Attendee.email == email).first()
+            
+            if not attendee:
+                results.append({
+                    "email": email,
+                    "success": False,
+                    "message": "Attendee not found"
+                })
+                continue
+            
+            # Generate QR code data (unique token)
+            if not attendee.qr_code_data:
+                attendee.qr_code_data = f"USER:{attendee.id}:TOKEN:{str(uuid.uuid4())}"
+            
+            # Generate QR image
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(attendee.qr_code_data)
+            qr.make(fit=True)
+            
+            img = qr.make_image(fill_color="black", back_color="white")
+            
+            # Convert to bytes for base64 encoding
+            buffer = io.BytesIO()
+            img.save(buffer, format='PNG')
+            buffer.seek(0)
+            
+            # Save as base64 data URL
+            import base64
+            img_str = base64.b64encode(buffer.read()).decode()
+            qr_data_url = f"data:image/png;base64,{img_str}"
+            
+            attendee.qr_image_url = qr_data_url
+            
+            results.append({
+                "email": email,
+                "name": attendee.name,
+                "qr_generated": True,
+                "qr_url": qr_data_url,
+                "has_biometric": attendee.has_biometric,
+                "qr_enabled": attendee.qr_enabled
+            })
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "results": results,
+            "message": f"Generated {len(results)} QR codes"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        return {"success": False, "message": str(e)}
+    finally:
+        db.close()
+
+
+@router.get("/api/qr/{attendee_id}")
+async def get_qr_image(attendee_id: int):
+    """Get QR code image for an attendee"""
+    db: Session = next(get_db())
+    
+    try:
+        attendee = db.query(Attendee).filter(Attendee.id == attendee_id).first()
+        
+        if not attendee or not attendee.qr_image_url:
+            raise HTTPException(status_code=404, detail="QR code not found")
+        
+        # If stored as data URL, extract the base64 part
+        if attendee.qr_image_url.startswith("data:image"):
+            img_data = attendee.qr_image_url.split(",")[1]
+            img_bytes = base64.b64decode(img_data)
+            
+            return StreamingResponse(
+                io.BytesIO(img_bytes),
+                media_type="image/png",
+                headers={"Content-Disposition": f"inline; filename=qr_{attendee.email}.png"}
+            )
+        
+        raise HTTPException(status_code=404, detail="Invalid QR image")
+        
+    finally:
+        db.close()
 
 @router.get("/{filename:path}")
 async def admin_portal_static(filename: str):
