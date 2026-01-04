@@ -20,8 +20,13 @@ class AttendeeResult(BaseModel):
     class Config:
         from_attributes = True  # Important! Allows ORM mod
 
+class BatchAttendeeResult(BaseModel):
+    name: str
+    email: str
+    invite_code: str
+
 class BatchUploadResponse(BaseModel):
     total_processed: int
     success_count: int
     skipped_emails: List[str]
-    results: List[AttendeeResult]  # Add th
+    results: List[BatchAttendeeResult]
