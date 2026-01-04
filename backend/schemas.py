@@ -14,7 +14,7 @@ class AttendeeResult(BaseModel):
     name: str
     email: str
     dni: Optional[str] = None
-    invite_code: str
+    invite_code: str  # This requires invite_code
     status: str
     created_at: datetime
 
@@ -23,9 +23,9 @@ class AttendeeResult(BaseModel):
 class BatchAttendeeResult(BaseModel):
     name: str
     email: str
-    invite_code: str
+    invite_code: str  # This also requires invite_code
 
-# FIXED: Remove inheritance from AttendeeResult since BatchQRResult doesn't have invite_code
+# This model should NOT inherit from AttendeeResult
 class BatchQRResult(BaseModel):
     name: str
     email: str
@@ -35,17 +35,19 @@ class BatchQRResult(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+# This should use BatchQRResult, not BatchAttendeeResult
 class BatchQRUploadResponse(BaseModel):
     total_processed: int
     success_count: int
     skipped_emails: List[str]
-    results: List[BatchQRResult]
+    results: List[BatchQRResult]  # Make sure this is BatchQRResult
 
+# This is for regular attendees (with invite codes)
 class BatchUploadResponse(BaseModel):
     total_processed: int
     success_count: int
     skipped_emails: List[str]
-    results: List[BatchAttendeeResult]
+    results: List[BatchAttendeeResult]  # This requires invite_code
 
 
 class GenerateQRCodesRequest(BaseModel):

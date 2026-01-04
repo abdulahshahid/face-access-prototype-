@@ -3746,7 +3746,7 @@ async def upload_qr_page(request: Request):
 </html>
     """)
 
-@router.post("/upload-csv-qr", response_model=BatchUploadResponse)
+@router.post("/upload-csv-qr", response_model=BatchQRUploadResponse)
 async def upload_csv_qr(
     request: Request,
     file: UploadFile = File(...), 
