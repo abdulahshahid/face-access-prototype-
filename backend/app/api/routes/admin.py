@@ -2381,7 +2381,7 @@ async def attendees_management(request: Request):
         .container {
             position: relative;
             z-index: 1;
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
             padding: 40px 24px;
         }
@@ -2491,11 +2491,13 @@ async def attendees_management(request: Request):
             border-radius: 15px;
             overflow: hidden;
             backdrop-filter: blur(10px);
+            overflow-x: auto;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 1200px;
         }
         
         thead {
@@ -2503,17 +2505,19 @@ async def attendees_management(request: Request):
         }
         
         th {
-            padding: 18px 24px;
+            padding: 18px 16px;
             text-align: left;
             font-size: 14px;
             font-weight: 600;
             color: rgba(255, 255, 255, 0.6);
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            white-space: nowrap;
         }
         
         td {
-            padding: 18px 24px;
+            padding: 16px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            vertical-align: middle;
         }
         
         tr:last-child td {
@@ -2534,6 +2538,48 @@ async def attendees_management(request: Request):
             color: rgba(255, 255, 255, 0.6);
         }
         
+        /* Auth Type Styles */
+        .auth-type {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        
+        .auth-type.biometric {
+            background: linear-gradient(135deg, rgba(255, 107, 107, 0.15), rgba(238, 90, 82, 0.15));
+            color: #ff6b6b;
+            border: 1px solid rgba(255, 107, 107, 0.3);
+        }
+        
+        .auth-type.qr {
+            background: linear-gradient(135deg, rgba(78, 205, 196, 0.15), rgba(68, 160, 141, 0.15));
+            color: #4ecdc4;
+            border: 1px solid rgba(78, 205, 196, 0.3);
+        }
+        
+        .auth-type.invite {
+            background: linear-gradient(135deg, rgba(255, 209, 102, 0.15), rgba(255, 158, 0, 0.15));
+            color: #ffd166;
+            border: 1px solid rgba(255, 209, 102, 0.3);
+        }
+        
+        .auth-type.none {
+            background: rgba(233, 236, 239, 0.15);
+            color: #e9ecef;
+            border: 1px solid rgba(233, 236, 239, 0.3);
+        }
+        
+        .auth-type i {
+            font-size: 10px;
+        }
+        
         .status-badge {
             display: inline-block;
             padding: 6px 12px;
@@ -2542,6 +2588,7 @@ async def attendees_management(request: Request):
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            white-space: nowrap;
         }
         
         .status-pending {
@@ -2564,13 +2611,16 @@ async def attendees_management(request: Request):
         
         .invite-code {
             font-family: 'Monaco', 'Courier New', monospace;
-            font-size: 13px;
+            font-size: 12px;
             color: rgba(255, 255, 255, 0.8);
             background: rgba(255, 255, 255, 0.05);
             padding: 8px 12px;
             border-radius: 8px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             word-break: break-all;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
         .action-buttons {
@@ -2589,6 +2639,7 @@ async def attendees_management(request: Request):
             display: flex;
             align-items: center;
             gap: 6px;
+            white-space: nowrap;
         }
         
         .delete-btn {
@@ -2792,16 +2843,8 @@ async def attendees_management(request: Request):
             background: rgba(239, 68, 68, 0.25);
         }
         
-        @media (max-width: 768px) {
-            .container { padding: 24px 16px; }
-            .header { flex-direction: column; align-items: stretch; }
-            .search-box { max-width: 100%; }
-            th, td { padding: 12px 16px; }
-            .action-buttons { flex-direction: column; }
-            .modal { padding: 24px; width: 95%; }
-        }
-        
-        @media (max-width: 1024px) {
+        /* Mobile cards */
+        @media (max-width: 1200px) {
             .table-container { display: none; }
             .mobile-cards { display: block; }
         }
@@ -2867,6 +2910,14 @@ async def attendees_management(request: Request):
         }
         
         .mobile-card-actions button { flex: 1; }
+        
+        @media (max-width: 768px) {
+            .container { padding: 24px 16px; }
+            .header { flex-direction: column; align-items: stretch; }
+            .search-box { max-width: 100%; }
+            .modal { padding: 24px; width: 95%; }
+            .mobile-card-actions { flex-direction: column; }
+        }
     </style>
 </head>
 <body>
@@ -2909,15 +2960,17 @@ async def attendees_management(request: Request):
                 <thead>
                     <tr>
                         <th>Name & Email</th>
+                        <th>Auth Type</th>
                         <th>Status</th>
                         <th>Invite Code</th>
                         <th>Created Date</th>
+                        <th>Last Access</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="attendeesBody">
                     <tr>
-                        <td colspan="5" class="loading">
+                        <td colspan="7" class="loading">
                             <div class="spinner"></div>
                             <p>Loading attendees...</p>
                         </td>
@@ -3015,7 +3068,7 @@ async def attendees_management(request: Request):
         
         async function loadAttendees() {
             try {
-                attendeesBody.innerHTML = `<tr><td colspan="5" class="loading"><div class="spinner"></div><p>Loading attendees...</p></td></tr>`;
+                attendeesBody.innerHTML = `<tr><td colspan="7" class="loading"><div class="spinner"></div><p>Loading attendees...</p></td></tr>`;
                 mobileCards.innerHTML = `<div class="loading"><div class="spinner"></div><p>Loading attendees...</p></div>`;
                 
                 const params = new URLSearchParams({
@@ -3036,7 +3089,7 @@ async def attendees_management(request: Request):
                 
             } catch (error) {
                 console.error('Error loading attendees:', error);
-                attendeesBody.innerHTML = `<tr><td colspan="5" class="no-data"><i class="fas fa-exclamation-circle"></i><p>Error loading attendees.</p></td></tr>`;
+                attendeesBody.innerHTML = `<tr><td colspan="7" class="no-data"><i class="fas fa-exclamation-circle"></i><p>Error loading attendees.</p></td></tr>`;
                 mobileCards.innerHTML = `<div class="no-data"><i class="fas fa-exclamation-circle"></i><p>Error loading attendees.</p></div>`;
                 showToast('Error loading attendees', 'error');
             }
@@ -3058,18 +3111,41 @@ async def attendees_management(request: Request):
             nextBtn.disabled = itemsCount < limit;
         }
         
+        function getAuthTypeHTML(attendee) {
+            if (attendee.has_biometric) {
+                return '<span class="auth-type biometric"><i class="fas fa-face-smile"></i> Biometric</span>';
+            } else if (attendee.qr_enabled) {
+                return '<span class="auth-type qr"><i class="fas fa-qrcode"></i> QR Code</span>';
+            } else if (attendee.invite_code) {
+                return '<span class="auth-type invite"><i class="fas fa-key"></i> Invite Code</span>';
+            } else {
+                return '<span class="auth-type none"><i class="fas fa-question"></i> None</span>';
+            }
+        }
+        
+        function formatDate(dateString) {
+            if (!dateString) return 'Never';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
         function renderAttendeesTable(attendees) {
             if (attendees.length === 0) {
-                attendeesBody.innerHTML = `<tr><td colspan="5" class="no-data"><i class="fas fa-users-slash"></i><p>No attendees found${currentSearch ? ' matching your search' : ''}.</p></td></tr>`;
+                attendeesBody.innerHTML = `<tr><td colspan="7" class="no-data"><i class="fas fa-users-slash"></i><p>No attendees found${currentSearch ? ' matching your search' : ''}.</p></td></tr>`;
                 return;
             }
             
             const rows = attendees.map(attendee => {
-                const createdDate = new Date(attendee.created_at).toLocaleDateString('en-US', {
-                    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                });
+                const createdDate = formatDate(attendee.created_at);
+                const lastAccessDate = formatDate(attendee.last_access_at);
                 const statusClass = getStatusClass(attendee.status);
                 const statusText = getStatusText(attendee.status);
+                const authTypeHTML = getAuthTypeHTML(attendee);
                 const baseUrl = window.location.origin;
                 const inviteLink = `${baseUrl}/register?code=${attendee.invite_code}`;
                 
@@ -3085,14 +3161,19 @@ async def attendees_management(request: Request):
                             <div class="attendee-name">${attendee.name || 'N/A'}</div>
                             <div class="attendee-email">${attendee.email || 'N/A'}</div>
                         </td>
+                        <td>${authTypeHTML}</td>
                         <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                        <td><div class="invite-code" title="${inviteLink}">${attendee.invite_code}</div></td>
+                        <td><div class="invite-code" title="${attendee.invite_code || 'No invite code'}">${attendee.invite_code || 'N/A'}</div></td>
                         <td>${createdDate}</td>
+                        <td>${lastAccessDate}</td>
                         <td>
                             <div class="action-buttons">
-                                <button class="action-btn copy-btn" onclick="copyInviteLink('${inviteLink.replace(/'/g, "\\'")}')">
-                                    <i class="fas fa-copy"></i> Copy
-                                </button>
+                                ${attendee.invite_code ? 
+                                    `<button class="action-btn copy-btn" onclick="copyInviteLink('${inviteLink.replace(/'/g, "\\'")}')">
+                                        <i class="fas fa-copy"></i> Copy
+                                    </button>` : 
+                                    '<span class="action-btn" style="opacity:0.5;cursor:not-allowed;padding:8px 16px;">Copy</span>'
+                                }
                                 ${deleteButton}
                             </div>
                         </td>
@@ -3110,9 +3191,11 @@ async def attendees_management(request: Request):
             }
             
             const cards = attendees.map(attendee => {
-                const createdDate = new Date(attendee.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                const createdDate = formatDate(attendee.created_at);
+                const lastAccessDate = formatDate(attendee.last_access_at);
                 const statusClass = getStatusClass(attendee.status);
                 const statusText = getStatusText(attendee.status);
+                const authTypeHTML = getAuthTypeHTML(attendee);
                 const baseUrl = window.location.origin;
                 const inviteLink = `${baseUrl}/register?code=${attendee.invite_code}`;
                 
@@ -3128,23 +3211,33 @@ async def attendees_management(request: Request):
                             <div class="mobile-card-info">
                                 <h4>${attendee.name || 'N/A'}</h4>
                                 <p>${attendee.email || 'N/A'}</p>
-                                <span class="status-badge ${statusClass}">${statusText}</span>
+                                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                                    ${authTypeHTML}
+                                    <span class="status-badge ${statusClass}">${statusText}</span>
+                                </div>
                             </div>
                         </div>
                         <div class="mobile-card-details">
                             <div class="mobile-detail">
                                 <span class="mobile-detail-label">Invite Code:</span>
-                                <span class="mobile-detail-value invite-code">${(attendee.invite_code || '').substring(0, 8)}...</span>
+                                <span class="mobile-detail-value invite-code">${(attendee.invite_code || 'N/A').substring(0, 12)}...</span>
                             </div>
                             <div class="mobile-detail">
                                 <span class="mobile-detail-label">Created:</span>
                                 <span class="mobile-detail-value">${createdDate}</span>
                             </div>
+                            <div class="mobile-detail">
+                                <span class="mobile-detail-label">Last Access:</span>
+                                <span class="mobile-detail-value">${lastAccessDate}</span>
+                            </div>
                         </div>
                         <div class="mobile-card-actions">
-                            <button class="action-btn copy-btn" onclick="copyInviteLink('${inviteLink.replace(/'/g, "\\'")}')">
-                                <i class="fas fa-copy"></i> Copy Link
-                            </button>
+                            ${attendee.invite_code ? 
+                                `<button class="action-btn copy-btn" onclick="copyInviteLink('${inviteLink.replace(/'/g, "\\'")}')">
+                                    <i class="fas fa-copy"></i> Copy Link
+                                </button>` : 
+                                '<button class="action-btn" disabled style="opacity:0.5;">Copy Link</button>'
+                            }
                             ${deleteButton}
                         </div>
                     </div>
@@ -3231,7 +3324,6 @@ async def attendees_management(request: Request):
 </body>
 </html>
     """)
-
 
 
 
