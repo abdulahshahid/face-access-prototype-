@@ -25,16 +25,25 @@ class BatchAttendeeResult(BaseModel):
     email: str
     invite_code: str
 
-class BatchUploadResponse(BaseModel):
-    total_processed: int
-    success_count: int
-    skipped_emails: List[str]
-    results: List[BatchAttendeeResult]
+
 
 
 class GenerateQRCodesRequest(BaseModel):
     emails: List[str]
 
-
 class QRVerificationRequest(BaseModel):
     qr_data: str  # The scanned QR code data
+
+
+class BatchQRResult(BaseModel):
+    name: str
+    email: str
+    qr_code_data: str
+    qr_url: str
+    id: Optional[int] = None
+
+class BatchQRUploadResponse(BaseModel):
+    total_processed: int
+    success_count: int
+    skipped_emails: List[str]
+    results: List[BatchQRResult]

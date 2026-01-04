@@ -7,13 +7,20 @@ from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query, status, Request
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
+from fastapi import APIRouter, Request, HTTPException
+from fastapi.responses import HTMLResponse, StreamingResponse
+from sqlalchemy.orm import Session
+import qrcode
+import io
+import uuid
+from typing import List
 
 from db.session import get_db
 from models.attendee import Attendee
 from core.deps import get_current_admin
 from core.security import generate_invite_code, verify_access_token
 from core.qdrant_ops import qdrant_service
-from schemas import AttendeeResult, BatchUploadResponse, GenerateQRCodesRequest, QRVerificationRequest
+from schemas import AttendeeResult, BatchUploadResponse, GenerateQRCodesRequest, QRVerificationRequest, BatchQRUploadResponse, BatchQRResult
 from fastapi import Request, Depends, HTTPException, status
 from jose import JWTError
 
@@ -3226,17 +3233,11 @@ async def attendees_management(request: Request):
     """)
 
 
-from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
-from sqlalchemy.orm import Session
-import qrcode
-import io
-import uuid
-from typing import List
 
-@router.get("/portal/qr-generator", response_class=HTMLResponse)
-async def qr_generator_page(request: Request):
-    """Serve the QR code generation page"""
+
+@router.get("/portal/upload-qr", response_class=HTMLResponse)
+async def upload_qr_page(request: Request):
+    """Serve the QR CSV upload page"""
     is_auth, redirect_response = check_auth_and_redirect(request)
     if not is_auth and redirect_response:
         return redirect_response
@@ -3247,7 +3248,7 @@ async def qr_generator_page(request: Request):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR Code Generator</title>
+    <title>QR Code Bulk Upload</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         * {
@@ -3285,53 +3286,32 @@ async def qr_generator_page(request: Request):
             margin-bottom: 30px;
         }
         
-        .input-section {
-            background: #f8f9fa;
-            padding: 25px;
+        .upload-area {
+            border: 3px dashed #667eea;
             border-radius: 12px;
+            padding: 60px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
             margin-bottom: 30px;
         }
         
-        .input-group {
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f8f9fa;
+        }
+        
+        .upload-icon {
+            font-size: 64px;
+            color: #667eea;
             margin-bottom: 20px;
         }
         
-        label {
-            display: block;
-            font-weight: 600;
-            color: #555;
-            margin-bottom: 8px;
+        input[type="file"] {
+            display: none;
         }
         
-        textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 14px;
-            resize: vertical;
-            min-height: 120px;
-        }
-        
-        textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .hint {
-            font-size: 13px;
-            color: #888;
-            margin-top: 5px;
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-        
-        button {
+        .btn {
             padding: 12px 30px;
             border: none;
             border-radius: 8px;
@@ -3339,9 +3319,6 @@ async def qr_generator_page(request: Request):
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
         
         .btn-primary {
@@ -3354,43 +3331,8 @@ async def qr_generator_page(request: Request):
             box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
         }
         
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-        
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
-        
         .results {
             margin-top: 30px;
-        }
-        
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 12px;
-            text-align: center;
-        }
-        
-        .stat-number {
-            font-size: 36px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .stat-label {
-            font-size: 14px;
-            opacity: 0.9;
         }
         
         .qr-grid {
@@ -3406,101 +3348,12 @@ async def qr_generator_page(request: Request):
             border-radius: 12px;
             padding: 20px;
             text-align: center;
-            transition: all 0.3s;
-        }
-        
-        .qr-card:hover {
-            border-color: #667eea;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-            transform: translateY(-5px);
         }
         
         .qr-card img {
             width: 200px;
             height: 200px;
             margin: 15px auto;
-            border: 3px solid #f0f0f0;
-            border-radius: 8px;
-        }
-        
-        .qr-info {
-            margin-top: 15px;
-        }
-        
-        .qr-name {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 5px;
-        }
-        
-        .qr-email {
-            font-size: 13px;
-            color: #666;
-            word-break: break-all;
-        }
-        
-        .qr-status {
-            display: inline-block;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-top: 10px;
-        }
-        
-        .status-success {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .status-biometric {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .download-btn {
-            margin-top: 10px;
-            padding: 8px 16px;
-            background: #28a745;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 13px;
-        }
-        
-        .download-btn:hover {
-            background: #218838;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #667eea;
-        }
-        
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            border-left: 4px solid #f5c6cb;
         }
         
         .success {
@@ -3509,7 +3362,14 @@ async def qr_generator_page(request: Request):
             padding: 15px;
             border-radius: 8px;
             margin-top: 20px;
-            border-left: 4px solid #c3e6cb;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
         }
     </style>
 </head>
@@ -3517,132 +3377,71 @@ async def qr_generator_page(request: Request):
     <div class="container">
         <h1>
             <i class="fas fa-qrcode"></i>
-            QR Code Generator
+            QR Code Bulk Upload
         </h1>
-        <p class="subtitle">Generate QR codes for attendees - one email per line</p>
+        <p class="subtitle">Upload CSV with name,email columns to generate QR codes automatically</p>
         
-        <div class="input-section">
-            <div class="input-group">
-                <label for="emails">
-                    <i class="fas fa-envelope"></i> Enter Email Addresses
-                </label>
-                <textarea id="emails" placeholder="user1@example.com
-user2@example.com
-user3@example.com"></textarea>
-                <p class="hint">Enter one email address per line</p>
+        <div class="upload-area" onclick="document.getElementById('csvFile').click()">
+            <div class="upload-icon">
+                <i class="fas fa-cloud-upload-alt"></i>
             </div>
-            
-            <div class="button-group">
-                <button class="btn-primary" onclick="generateQRCodes()">
-                    <i class="fas fa-magic"></i> Generate QR Codes
-                </button>
-                <button class="btn-secondary" onclick="downloadAllQRCodes()">
-                    <i class="fas fa-download"></i> Download All
-                </button>
-            </div>
-        </div>
-        
-        <div id="results" class="results" style="display: none;">
-            <div class="stats">
-                <div class="stat-card">
-                    <div class="stat-number" id="totalCount">0</div>
-                    <div class="stat-label">Total Processed</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="successCount">0</div>
-                    <div class="stat-label">QR Generated</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="biometricCount">0</div>
-                    <div class="stat-label">Has Biometric</div>
-                </div>
-            </div>
-            
-            <div id="qrGrid" class="qr-grid"></div>
-        </div>
-        
-        <div id="loading" class="loading" style="display: none;">
-            <div class="spinner"></div>
-            <p>Generating QR codes...</p>
+            <h3>Click to upload CSV file</h3>
+            <p>CSV must have: name, email</p>
+            <input type="file" id="csvFile" accept=".csv" onchange="uploadCSV()">
         </div>
         
         <div id="message"></div>
+        <div id="results" class="results" style="display: none;">
+            <h2>Generated QR Codes</h2>
+            <div id="qrGrid" class="qr-grid"></div>
+        </div>
     </div>
     
     <script>
-        async function generateQRCodes() {
-            const emails = document.getElementById('emails').value
-                .split('\\n')
-                .map(e => e.trim())
-                .filter(e => e.length > 0);
+        async function uploadCSV() {
+            const fileInput = document.getElementById('csvFile');
+            const file = fileInput.files[0];
             
-            if (emails.length === 0) {
-                showMessage('Please enter at least one email address', 'error');
-                return;
-            }
+            if (!file) return;
             
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('results').style.display = 'none';
-            document.getElementById('message').innerHTML = '';
+            const formData = new FormData();
+            formData.append('file', file);
             
             try {
-                const response = await fetch('/api/admin/generate-qr-codes', {
+                const response = await fetch('/api/admin/upload-csv-qr', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ emails: emails })
+                    body: formData
                 });
                 
                 const data = await response.json();
                 
-                document.getElementById('loading').style.display = 'none';
-                
-                if (data.success) {
+                if (data.success_count > 0) {
                     displayResults(data.results);
-                    showMessage(`Successfully generated ${data.results.length} QR codes!`, 'success');
+                    showMessage(\`Successfully generated \${data.success_count} QR codes!\`, 'success');
                 } else {
-                    showMessage(data.message || 'Failed to generate QR codes', 'error');
+                    showMessage('No new QR codes generated. Check if emails already exist.', 'error');
                 }
             } catch (error) {
-                document.getElementById('loading').style.display = 'none';
                 showMessage('Error: ' + error.message, 'error');
             }
         }
         
         function displayResults(results) {
             document.getElementById('results').style.display = 'block';
-            
-            const total = results.length;
-            const success = results.filter(r => r.qr_generated).length;
-            const biometric = results.filter(r => r.has_biometric).length;
-            
-            document.getElementById('totalCount').textContent = total;
-            document.getElementById('successCount').textContent = success;
-            document.getElementById('biometricCount').textContent = biometric;
-            
             const grid = document.getElementById('qrGrid');
             grid.innerHTML = '';
             
             results.forEach(result => {
                 const card = document.createElement('div');
                 card.className = 'qr-card';
-                
-                const statusClass = result.has_biometric ? 'status-biometric' : 'status-success';
-                const statusText = result.has_biometric ? 'Biometric Enrolled' : 'QR Enabled';
-                
-                card.innerHTML = `
-                    <img src="${result.qr_url}" alt="QR Code for ${result.email}">
-                    <div class="qr-info">
-                        <div class="qr-name">${result.name || 'Unknown'}</div>
-                        <div class="qr-email">${result.email}</div>
-                        <span class="qr-status ${statusClass}">${statusText}</span>
-                    </div>
-                    <button class="download-btn" onclick="downloadQR('${result.qr_url}', '${result.email}')">
+                card.innerHTML = \`
+                    <h3>\${result.name}</h3>
+                    <p>\${result.email}</p>
+                    <img src="\${result.qr_url}" alt="QR Code">
+                    <button class="btn btn-primary" onclick="downloadQR('\${result.qr_url}', '\${result.email}')">
                         <i class="fas fa-download"></i> Download
                     </button>
-                `;
-                
+                \`;
                 grid.appendChild(card);
             });
         }
@@ -3650,26 +3449,16 @@ user3@example.com"></textarea>
         function downloadQR(url, email) {
             const a = document.createElement('a');
             a.href = url;
-            a.download = `qr_${email}.png`;
+            a.download = \`qr_\${email}.png\`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-        }
-        
-        async function downloadAllQRCodes() {
-            showMessage('Preparing download...', 'success');
-            // Implement bulk download logic here
         }
         
         function showMessage(text, type) {
             const messageDiv = document.getElementById('message');
             messageDiv.className = type;
             messageDiv.textContent = text;
-            messageDiv.style.display = 'block';
-            
-            setTimeout(() => {
-                messageDiv.style.display = 'none';
-            }, 5000);
         }
     </script>
 </body>
@@ -3677,134 +3466,137 @@ user3@example.com"></textarea>
     """)
 
 
-@router.post("/generate-qr-codes")
-async def generate_qr_codes_api(
+@router.post("/upload-csv-qr", response_model=BatchUploadResponse)
+async def upload_csv_qr(
     request: Request,
-    data: GenerateQRCodesRequest,
+    file: UploadFile = File(...), 
     db: Session = Depends(get_db)
 ):
-    """Generate QR codes for multiple emails - only if biometric not registered"""
+    """Bulk import users for QR authentication (no biometric)"""
     is_auth, redirect_response = check_auth_and_redirect(request)
     if not is_auth:
         return redirect_response
     
-    emails = [email.strip().lower() for email in data.emails if email.strip()]
-    
-    if not emails:
-        return {"success": False, "message": "No valid emails provided"}
-    
-    results = []
+    if not file.filename.lower().endswith('.csv'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Invalid file format. Please upload a .csv file."
+        )
     
     try:
-        for email in emails:
-            attendee = db.query(Attendee).filter(Attendee.email == email).first()
-            
-            if not attendee:
-                results.append({
-                    "email": email,
-                    "success": False,
-                    "message": "Attendee not found"
-                })
-                continue
-            
-            # CHECK: If biometric already registered, deny QR generation
-            if attendee.has_biometric:
-                results.append({
-                    "email": email,
-                    "name": attendee.name,
-                    "success": False,
-                    "qr_generated": False,
-                    "message": "User already has biometric registered. Cannot generate QR code.",
-                    "has_biometric": True,
-                    "qr_enabled": False
-                })
-                continue
-            
-            # Generate unique QR data if missing
-            if not attendee.qr_code_data:
-                import uuid
-                attendee.qr_code_data = f"USER:{attendee.id}:TOKEN:{str(uuid.uuid4())}"
-            
-            # Generate QR image
-            qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_H,
-                box_size=10,
-                border=4,
-            )
-            qr.add_data(attendee.qr_code_data)
-            qr.make(fit=True)
-            
-            img = qr.make_image(fill_color="black", back_color="white")
-            
-            buffer = io.BytesIO()
-            img.save(buffer, format='PNG')
-            buffer.seek(0)
-            
-            import base64
-            img_str = base64.b64encode(buffer.read()).decode()
-            qr_data_url = f"data:image/png;base64,{img_str}"
-            
-            attendee.qr_image_url = qr_data_url
-            attendee.qr_enabled = True
-            attendee.has_biometric = False  # Explicitly set to False
-            
-            results.append({
-                "email": email,
-                "name": attendee.name,
-                "qr_generated": True,
-                "qr_url": qr_data_url,
-                "has_biometric": False,
-                "qr_enabled": True,
-                "message": "QR code generated successfully"
-            })
+        content = await file.read()
+        decoded_content = content.decode('utf-8')
+        csv_reader = csv.DictReader(io.StringIO(decoded_content))
+    except Exception as e:
+        logger.error(f"CSV Reading Error: {e}")
+        raise HTTPException(status_code=400, detail="Could not read or decode CSV file.")
+    
+    headers = [h.lower().strip() for h in csv_reader.fieldnames or []]
+    if 'email' not in headers:
+         raise HTTPException(
+             status_code=400, 
+             detail=f"CSV is missing required 'email' column. Found: {headers}"
+         )
+    
+    new_attendees = []
+    skipped_emails = []
+    results = []
+    
+    for row in csv_reader:
+        clean_row = {k.lower().strip(): v.strip() for k, v in row.items() if k}
         
+        email = clean_row.get('email')
+        name = clean_row.get('name', 'Unknown')
+        
+        if not email:
+            continue
+        
+        # Check if attendee already exists
+        existing = db.query(Attendee).filter(Attendee.email == email).first()
+        if existing:
+            skipped_emails.append(email)
+            continue
+        
+        # Generate unique QR code data immediately
+        import uuid
+        qr_code_data = f"USER:NEW:TOKEN:{str(uuid.uuid4())}"
+        
+        # Generate QR image
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_code_data)
+        qr.make(fit=True)
+        
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+        
+        import base64
+        img_str = base64.b64encode(buffer.read()).decode()
+        qr_data_url = f"data:image/png;base64,{img_str}"
+        
+        # Create attendee with QR authentication
+        attendee = Attendee(
+            name=name,
+            email=email,
+            invite_code=None,  # No invite code for QR users
+            status="pending",
+            # QR authentication enabled
+            has_biometric=False,
+            qr_enabled=True,
+            qr_code_data=qr_code_data,
+            qr_image_url=qr_data_url,
+            face_embedding_id=None,
+            access_method=None,
+            last_access_at=None
+        )
+        
+        db.add(attendee)
+        new_attendees.append(attendee)
+        
+        # Store the attendee data for response
+        results.append({
+            "name": name,
+            "email": email,
+            "qr_code_data": qr_code_data,
+            "qr_url": qr_data_url
+        })
+    
+    try:
         db.commit()
         
-        success_count = len([r for r in results if r.get("qr_generated")])
+        # Update IDs in results after commit
+        for i, attendee in enumerate(new_attendees):
+            results[i]["id"] = attendee.id
+            results[i]["qr_code_data"] = attendee.qr_code_data
+        
+        logger.info(
+            f"✅ [Admin] QR Batch Import: {len(new_attendees)} created with QR codes, "
+            f"{len(skipped_emails)} skipped"
+        )
         
         return {
-            "success": True,
-            "results": results,
-            "count": len(results),
-            "success_count": success_count,
-            "message": f"Successfully generated QR codes for {success_count} attendees"
+            "total_processed": len(new_attendees) + len(skipped_emails), 
+            "success_count": len(new_attendees),
+            "skipped_emails": skipped_emails,
+            "results": results
         }
         
     except Exception as e:
         db.rollback()
+        logger.error(f"❌ QR Batch Upload Failed: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error generating QR codes: {str(e)}"
+            status_code=500, 
+            detail="Database error while saving QR users."
         )
 
 
-@router.get("/api/qr/{attendee_id}")
-async def get_qr_image(attendee_id: int):
-    """Get QR code image for an attendee"""
-    db: Session = next(get_db())
-    
-    try:
-        attendee = db.query(Attendee).filter(Attendee.id == attendee_id).first()
-        
-        if not attendee or not attendee.qr_image_url:
-            raise HTTPException(status_code=404, detail="QR code not found")
-        
-        # If stored as data URL, extract the base64 part
-        if attendee.qr_image_url.startswith("data:image"):
-            img_data = attendee.qr_image_url.split(",")[1]
-            img_bytes = base64.b64decode(img_data)
-            
-            return StreamingResponse(
-                io.BytesIO(img_bytes),
-                media_type="image/png",
-                headers={"Content-Disposition": f"inline; filename=qr_{attendee.email}.png"}
-            )
-        
-        raise HTTPException(status_code=404, detail="Invalid QR image")
-        
-    finally:
-        db.close()
 
 @router.post("/verify-qr")
 async def verify_qr_code(
