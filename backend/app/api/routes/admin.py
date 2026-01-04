@@ -3664,7 +3664,7 @@ user3@example.com"></textarea>
 @router.post("/generate-qr-codes")
 async def generate_qr_codes_api(
     request: Request,
-    emails: List[str] = None
+    data: GenerateQRCodesRequest
 ):
     """Generate QR codes for multiple emails"""
     is_auth, _ = check_auth_and_redirect(request)

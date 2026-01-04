@@ -30,3 +30,7 @@ class BatchUploadResponse(BaseModel):
     success_count: int
     skipped_emails: List[str]
     results: List[BatchAttendeeResult]
+
+
+class GenerateQRCodesRequest(BaseModel):
+    emails: List[str]
