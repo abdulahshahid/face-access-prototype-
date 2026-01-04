@@ -3664,28 +3664,24 @@ user3@example.com"></textarea>
 @router.post("/generate-qr-codes")
 async def generate_qr_codes_api(
     request: Request,
-    data: GenerateQRCodesRequest
+    data: GenerateQRCodesRequest,
+    db: Session = Depends(get_db)
 ):
     """Generate QR codes for multiple emails"""
-    is_auth, _ = check_auth_and_redirect(request)
+    is_auth, redirect_response = check_auth_and_redirect(request)
     if not is_auth:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    
+        return redirect_response
+
+    # Extract and clean emails directly from the validated model
+    emails = [email.strip().lower() for email in data.emails if email.strip()]
+
     if not emails:
-        body = await request.json()
-        emails = body.get("emails", [])
-    
-    if not emails:
-        return {"success": False, "message": "No emails provided"}
-    
-    db: Session = next(get_db())
+        return {"success": False, "message": "No valid emails provided"}
+
     results = []
-    
+
     try:
         for email in emails:
-            email = email.strip().lower()
-            
-            # Find attendee
             attendee = db.query(Attendee).filter(Attendee.email == email).first()
             
             if not attendee:
@@ -3695,11 +3691,12 @@ async def generate_qr_codes_api(
                     "message": "Attendee not found"
                 })
                 continue
-            
-            # Generate QR code data (unique token)
+
+            # Generate unique QR data if missing
             if not attendee.qr_code_data:
+                import uuid
                 attendee.qr_code_data = f"USER:{attendee.id}:TOKEN:{str(uuid.uuid4())}"
-            
+
             # Generate QR image
             qr = qrcode.QRCode(
                 version=1,
@@ -3709,43 +3706,42 @@ async def generate_qr_codes_api(
             )
             qr.add_data(attendee.qr_code_data)
             qr.make(fit=True)
-            
             img = qr.make_image(fill_color="black", back_color="white")
-            
-            # Convert to bytes for base64 encoding
+
             buffer = io.BytesIO()
             img.save(buffer, format='PNG')
             buffer.seek(0)
-            
-            # Save as base64 data URL
+
             import base64
             img_str = base64.b64encode(buffer.read()).decode()
             qr_data_url = f"data:image/png;base64,{img_str}"
-            
-            attendee.qr_image_url = qr_data_url
-            
+
+            attendee.qr_image_url = qr_data_url  # optional: save if you want persistence
+
             results.append({
                 "email": email,
                 "name": attendee.name,
                 "qr_generated": True,
                 "qr_url": qr_data_url,
-                "has_biometric": attendee.has_biometric,
-                "qr_enabled": attendee.qr_enabled
+                "has_biometric": getattr(attendee, "has_biometric", False),
+                "qr_enabled": getattr(attendee, "qr_enabled", True),
             })
-        
+
         db.commit()
-        
+
         return {
             "success": True,
             "results": results,
-            "message": f"Generated {len(results)} QR codes"
+            "count": len(results),
+            "message": f"Successfully generated QR codes for {len(results)} attendees"
         }
-        
+
     except Exception as e:
         db.rollback()
-        return {"success": False, "message": str(e)}
-    finally:
-        db.close()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating QR codes: {str(e)}"
+        )
 
 
 @router.get("/api/qr/{attendee_id}")
