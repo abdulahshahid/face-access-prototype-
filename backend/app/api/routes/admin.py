@@ -14,6 +14,8 @@ from core.deps import get_current_admin
 from core.security import generate_invite_code, verify_access_token
 from core.qdrant_ops import qdrant_service
 from schemas import AttendeeResult, BatchUploadResponse
+from fastapi import Request, Depends, HTTPException, status
+from jose import JWTError
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -50,6 +52,28 @@ def check_auth_and_redirect(request: Request):
         return False, JSONResponse(
             status_code=401,
             content={"detail": "Not authenticated"}
+        )
+
+
+
+async def get_current_admin_from_cookie(request: Request):
+    token = request.cookies.get("access_token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            headers={"Location": "/api/admin/portal/login"}
+        )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        is_admin: bool = payload.get("is_admin")
+        if email != ADMIN_EMAIL or not is_admin:
+            raise HTTPException(status_code=401)
+        return payload
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            headers={"Location": "/api/admin/portal/login"}
         )
 
 # ==============================================================================
@@ -747,12 +771,8 @@ async def upload_page(request: Request):
     """)
 
 @router.get("/portal", response_class=HTMLResponse)
-async def admin_portal(request: Request):
+async def admin_portal(current_admin: dict = Depends(get_current_admin_from_cookie)):
     """Serve the main admin portal page"""
-    is_auth, redirect_response = check_auth_and_redirect(request)
-    if not is_auth and redirect_response:
-        return redirect_response
-    
     portal_page = ADMIN_PORTAL_DIR / "index.html"
     if portal_page.exists():
         return FileResponse(portal_page)
@@ -1034,9 +1054,7 @@ async def admin_portal_login():
                 <button type="submit" id="loginBtn">Login</button>
             </form>
             
-            <p class="note">
-                Use credentials from .env file (ADMIN_EMAIL and ADMIN_PASSWORD)
-            </p>
+            
             
             <div id="debug" class="debug"></div>
         </div>
@@ -1144,6 +1162,10 @@ async def admin_portal_login():
     </body>
     </html>
     """)
+
+
+
+
 import io
 import csv
 import logging

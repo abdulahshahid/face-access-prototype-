@@ -3,7 +3,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
-
+from fastapi import Response  # add this import
 from db.session import get_db
 from core.security import create_access_token
 
@@ -22,25 +22,35 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     user: dict
 
+
 @router.post("/login", response_model=LoginResponse)
-def login(login_data: LoginRequest, db: Session = Depends(get_db)):
-    """
-    Simple admin login using environment variables.
-    """
-    
-    # Check if credentials match env variables
+def login(
+    login_data: LoginRequest,
+    response: Response,  # add this parameter
+    db: Session = Depends(get_db)
+):
     if login_data.email == ADMIN_EMAIL and login_data.password == ADMIN_PASSWORD:
-        # Create JWT token
         access_token = create_access_token(
             data={
                 "sub": ADMIN_EMAIL,
-                "user_id": 0,  # Special ID for env admin
+                "user_id": 0,
                 "is_admin": True
             }
         )
-        
+
+        # Set HttpOnly cookie
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,          # prevents JS access (mitigates XSS)
+            secure=True,            # only send over HTTPS (set False in dev if needed)
+            samesite="lax",         # or "strict" depending on your needs
+            max_age=86400,          # 24 hours, match your token expiry
+            path="/"
+        )
+
         return {
-            "access_token": access_token,
+            "access_token": access_token,  # still return for frontend if needed
             "token_type": "bearer",
             "user": {
                 "id": 0,
@@ -49,12 +59,12 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
                 "is_admin": True
             }
         }
-    
-    # Invalid credentials
+
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid email or password"
     )
+
 
 @router.get("/me")
 def get_current_user_info():
