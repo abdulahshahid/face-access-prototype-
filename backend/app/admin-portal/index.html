@@ -10,6 +10,72 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Add these styles for auth type badges */
+        .auth-type {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .auth-type.biometric {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+            color: white;
+        }
+
+        .auth-type.qr {
+            background: linear-gradient(135deg, #4ecdc4, #44a08d);
+            color: white;
+        }
+
+        .auth-type.invite {
+            background: linear-gradient(135deg, #ffd166, #ff9e00);
+            color: white;
+        }
+
+        .auth-type.none {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+
+        .auth-type i {
+            font-size: 10px;
+        }
+
+        /* Keep your existing status badge styles */
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+
+        .status-verified {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-registered {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-blocked {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
 </head>
 <body>
     <!-- Sidebar Navigation -->
@@ -215,6 +281,15 @@
                         </select>
                     </div>
                     <div class="filter-group">
+                        <label>Auth Type:</label>
+                        <select id="authTypeFilter" onchange="loadAttendees()">
+                            <option value="">All</option>
+                            <option value="qr">QR Code</option>
+                            <option value="biometric">Biometric</option>
+                            <option value="invite">Invite Code</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
                         <label>Sort by:</label>
                         <select id="sortFilter" onchange="loadAttendees()">
                             <option value="newest">Newest First</option>
@@ -232,6 +307,7 @@
                                 <th>ID</th>
                                 <th>Name</th>
                                 <th>Email</th>
+                                <th>Auth Type</th>
                                 <th>Invite Code</th>
                                 <th>Status</th>
                                 <th>Registered</th>
@@ -242,7 +318,7 @@
                         <tbody id="attendeesTableBody">
                             <!-- Data will be loaded here -->
                             <tr id="loadingRow">
-                                <td colspan="8" style="text-align: center; padding: 40px;">
+                                <td colspan="9" style="text-align: center; padding: 40px;">
                                     <div class="loading-spinner">
                                         <i class="fas fa-spinner fa-spin"></i>
                                         <span>Loading attendees...</span>
@@ -476,6 +552,220 @@ alex@example.com,Alex Johnson</pre>
     <div id="toastContainer" class="toast-container"></div>
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="admin.js"></script>
+    <script>
+        // Add this function to determine auth type
+        function getAuthType(attendee) {
+            if (attendee.has_biometric) {
+                return '<span class="auth-type biometric"><i class="fas fa-face-smile"></i> Biometric</span>';
+            } else if (attendee.qr_enabled) {
+                return '<span class="auth-type qr"><i class="fas fa-qrcode"></i> QR Code</span>';
+            } else if (attendee.invite_code) {
+                return '<span class="auth-type invite"><i class="fas fa-key"></i> Invite Code</span>';
+            } else {
+                return '<span class="auth-type none"><i class="fas fa-question"></i> None</span>';
+            }
+        }
+
+        // Update the renderAttendees function
+        function renderAttendees(attendees) {
+            const tbody = document.getElementById('attendeesTableBody');
+            tbody.innerHTML = '';
+            
+            if (attendees.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 40px;">
+                            <div class="no-data">
+                                <i class="fas fa-users-slash"></i>
+                                <h3>No attendees found</h3>
+                                <p>Add attendees using bulk upload or manual creation</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            attendees.forEach(attendee => {
+                const row = document.createElement('tr');
+                const registeredDate = new Date(attendee.created_at).toLocaleDateString();
+                const lastAccess = attendee.last_access_at 
+                    ? new Date(attendee.last_access_at).toLocaleString()
+                    : 'Never';
+                
+                // Format status with badge
+                const statusClass = attendee.status === 'verified' ? 'status-verified' :
+                                   attendee.status === 'registered' ? 'status-registered' :
+                                   attendee.status === 'pending' ? 'status-pending' :
+                                   'status-blocked';
+                
+                // Get auth type
+                const authType = getAuthType(attendee);
+                
+                row.innerHTML = `
+                    <td>${attendee.id}</td>
+                    <td>
+                        <div class="attendee-info">
+                            <strong>${escapeHtml(attendee.name)}</strong>
+                        </div>
+                    </td>
+                    <td>${escapeHtml(attendee.email)}</td>
+                    <td>${authType}</td>
+                    <td>${attendee.invite_code || '<em>No invite code</em>'}</td>
+                    <td><span class="status-badge ${statusClass}">${attendee.status}</span></td>
+                    <td>${registeredDate}</td>
+                    <td>${lastAccess}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn-action" onclick="viewAttendee(${attendee.id})" title="View Details">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn-action" onclick="editAttendee(${attendee.id})" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn-action btn-danger" onclick="deleteAttendee(${attendee.id})" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Update the loadAttendees function to include auth type filtering
+        async function loadAttendees() {
+            const skip = (currentPage - 1) * pageSize;
+            const status = document.getElementById('statusFilter').value;
+            const authType = document.getElementById('authTypeFilter').value;
+            const sortBy = document.getElementById('sortFilter').value;
+            
+            // Build query parameters
+            const params = new URLSearchParams({
+                skip: skip,
+                limit: pageSize,
+                sort_by: sortBy
+            });
+            
+            if (status) {
+                params.append('status', status);
+            }
+            
+            if (authType) {
+                params.append('auth_type', authType);
+            }
+            
+            try {
+                showLoading(true);
+                const response = await fetch(`/api/admin/attendees?${params.toString()}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+                
+                const attendees = await response.json();
+                renderAttendees(attendees);
+                
+                // Update pagination controls
+                updatePaginationControls();
+                
+            } catch (error) {
+                console.error('Error loading attendees:', error);
+                showMessage('Failed to load attendees: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Helper function for HTML escaping
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Show loading indicator
+        function showLoading(isLoading) {
+            const loadingRow = document.getElementById('loadingRow');
+            if (loadingRow) {
+                loadingRow.style.display = isLoading ? 'table-row' : 'none';
+            }
+        }
+
+        // Show message function
+        function showMessage(text, type) {
+            // You can implement a toast notification system here
+            alert(`${type}: ${text}`);
+        }
+
+        // Update pagination controls (you'll need to implement this based on your backend response)
+        function updatePaginationControls() {
+            // Implement based on total count from backend
+            // You might need to modify your backend to return total count
+        }
+
+        // Global variables for pagination
+        let currentPage = 1;
+        let pageSize = 10;
+        
+        // Function to change page
+        function changePage(delta) {
+            currentPage += delta;
+            if (currentPage < 1) currentPage = 1;
+            loadAttendees();
+        }
+        
+        // Function to change page size
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSize').value);
+            currentPage = 1;
+            loadAttendees();
+        }
+
+        // Function to search attendees
+        function searchAttendees() {
+            // Implement search functionality
+            console.log('Searching attendees...');
+        }
+
+        // Function to export attendees
+        function exportAttendees() {
+            // Implement export functionality
+            console.log('Exporting attendees...');
+        }
+
+        // Functions for attendee actions
+        function viewAttendee(id) {
+            console.log('View attendee:', id);
+            // Implement view functionality
+        }
+
+        function editAttendee(id) {
+            console.log('Edit attendee:', id);
+            // Implement edit functionality
+        }
+
+        function deleteAttendee(id) {
+            console.log('Delete attendee:', id);
+            // Implement delete functionality
+        }
+
+        // Other functions (keep your existing implementations)
+        function downloadTemplate() {
+            console.log('Downloading template...');
+        }
+
+        function saveSettings() {
+            console.log('Saving settings...');
+        }
+
+        function resetSettings() {
+            console.log('Resetting settings...');
+        }
+
+        function closeModal() {
+            document.getElementById('deleteModal').style.display = 'none';
+        }
+    </script>
 </body>
 </html>
