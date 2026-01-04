@@ -3301,10 +3301,19 @@ async def upload_qr_page(request: Request):
             background: #f8f9fa;
         }
         
+        .upload-area.active {
+            border-color: #28a745;
+            background: #e8f5e9;
+        }
+        
         .upload-icon {
             font-size: 64px;
             color: #667eea;
             margin-bottom: 20px;
+        }
+        
+        .upload-area.active .upload-icon {
+            color: #28a745;
         }
         
         input[type="file"] {
@@ -3319,6 +3328,9 @@ async def upload_qr_page(request: Request):
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
         
         .btn-primary {
@@ -3326,9 +3338,85 @@ async def upload_qr_page(request: Request):
             color: white;
         }
         
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+        
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(40, 167, 69, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .file-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .file-info.show {
+            display: block;
+        }
+        
+        .file-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .file-size {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .progress-container.show {
+            display: block;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
         }
         
         .results {
@@ -3348,28 +3436,74 @@ async def upload_qr_page(request: Request):
             border-radius: 12px;
             padding: 20px;
             text-align: center;
+            transition: transform 0.3s;
+        }
+        
+        .qr-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
         
         .qr-card img {
             width: 200px;
             height: 200px;
             margin: 15px auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .message.show {
+            display: block;
         }
         
         .success {
             background: #d4edda;
             color: #155724;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
+            border: 1px solid #c3e6cb;
         }
         
         .error {
             background: #f8d7da;
             color: #721c24;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .loading.show {
+            display: block;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -3381,16 +3515,43 @@ async def upload_qr_page(request: Request):
         </h1>
         <p class="subtitle">Upload CSV with name,email columns to generate QR codes automatically</p>
         
-        <div class="upload-area" onclick="document.getElementById('csvFile').click()">
+        <div class="upload-area" id="uploadArea" onclick="document.getElementById('csvFile').click()">
             <div class="upload-icon">
                 <i class="fas fa-cloud-upload-alt"></i>
             </div>
             <h3>Click to upload CSV file</h3>
             <p>CSV must have: name, email</p>
-            <input type="file" id="csvFile" accept=".csv" onchange="uploadCSV()">
+            <input type="file" id="csvFile" accept=".csv" onchange="handleFileSelect()">
         </div>
         
-        <div id="message"></div>
+        <div class="file-info" id="fileInfo">
+            <div class="file-name" id="fileName"></div>
+            <div class="file-size" id="fileSize"></div>
+        </div>
+        
+        <div class="action-buttons">
+            <button class="btn btn-primary" id="uploadBtn" onclick="uploadCSV()" disabled>
+                <i class="fas fa-upload"></i> Upload CSV
+            </button>
+            <button class="btn" onclick="resetForm()" id="resetBtn">
+                <i class="fas fa-redo"></i> Reset
+            </button>
+        </div>
+        
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">Uploading...</div>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing CSV and generating QR codes...</p>
+        </div>
+        
+        <div class="message" id="message"></div>
+        
         <div id="results" class="results" style="display: none;">
             <h2>Generated QR Codes</h2>
             <div id="qrGrid" class="qr-grid"></div>
@@ -3398,58 +3559,151 @@ async def upload_qr_page(request: Request):
     </div>
     
     <script>
-        async function uploadCSV() {
+        let selectedFile = null;
+        
+        function handleFileSelect() {
             const fileInput = document.getElementById('csvFile');
-            const file = fileInput.files[0];
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInfo = document.getElementById('fileInfo');
+            const fileName = document.getElementById('fileName');
+            const fileSize = document.getElementById('fileSize');
+            const uploadBtn = document.getElementById('uploadBtn');
             
-            if (!file) return;
+            if (fileInput.files.length > 0) {
+                selectedFile = fileInput.files[0];
+                
+                // Validate file type
+                if (!selectedFile.name.toLowerCase().endsWith('.csv')) {
+                    showMessage('Please select a CSV file', 'error');
+                    resetForm();
+                    return;
+                }
+                
+                // Update UI
+                uploadArea.classList.add('active');
+                fileInfo.classList.add('show');
+                fileName.textContent = selectedFile.name;
+                fileSize.textContent = formatFileSize(selectedFile.size);
+                uploadBtn.disabled = false;
+            }
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        async function uploadCSV() {
+            if (!selectedFile) {
+                showMessage('Please select a file first', 'error');
+                return;
+            }
+            
+            const uploadBtn = document.getElementById('uploadBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            const loading = document.getElementById('loading');
+            
+            // Disable buttons and show progress
+            uploadBtn.disabled = true;
+            resetBtn.disabled = true;
+            uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+            progressContainer.classList.add('show');
+            loading.classList.add('show');
+            
+            // Simulate progress
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += 10;
+                progressFill.style.width = progress + '%';
+                if (progress >= 90) clearInterval(progressInterval);
+            }, 200);
             
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', selectedFile);
             
             try {
-                const response = await fetch('/api/admin/upload-csv-qr', {
+                // Note: Make sure the endpoint matches your API
+                // The HTML form says /api/admin/upload-csv-qr but your router is /upload-csv-qr
+                const response = await fetch('/upload-csv-qr', {
                     method: 'POST',
                     body: formData
                 });
                 
+                clearInterval(progressInterval);
+                progressFill.style.width = '100%';
+                progressText.textContent = 'Processing complete!';
+                
                 const data = await response.json();
                 
-                if (data.success_count > 0) {
-                    displayResults(data.results);
-                    showMessage(\`Successfully generated \${data.success_count} QR codes!\`, 'success');
+                if (response.ok) {
+                    if (data.success_count > 0) {
+                        displayResults(data.results);
+                        showMessage(
+                            `Successfully generated ${data.success_count} QR codes! ` +
+                            (data.skipped_emails?.length > 0 ? 
+                             `${data.skipped_emails.length} emails skipped (already exist).` : ''),
+                            'success'
+                        );
+                    } else {
+                        showMessage(
+                            'No new QR codes generated. ' +
+                            (data.skipped_emails?.length > 0 ? 
+                             `All ${data.skipped_emails.length} emails already exist.` : ''),
+                            'info'
+                        );
+                    }
                 } else {
-                    showMessage('No new QR codes generated. Check if emails already exist.', 'error');
+                    throw new Error(data.detail || 'Upload failed');
                 }
             } catch (error) {
+                clearInterval(progressInterval);
                 showMessage('Error: ' + error.message, 'error');
+            } finally {
+                // Reset UI
+                setTimeout(() => {
+                    loading.classList.remove('show');
+                    progressContainer.classList.remove('show');
+                    uploadBtn.disabled = false;
+                    resetBtn.disabled = false;
+                    uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload CSV';
+                }, 1000);
             }
         }
         
         function displayResults(results) {
-            document.getElementById('results').style.display = 'block';
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.style.display = 'block';
             const grid = document.getElementById('qrGrid');
             grid.innerHTML = '';
             
             results.forEach(result => {
                 const card = document.createElement('div');
                 card.className = 'qr-card';
-                card.innerHTML = \`
-                    <h3>\${result.name}</h3>
-                    <p>\${result.email}</p>
-                    <img src="\${result.qr_url}" alt="QR Code">
-                    <button class="btn btn-primary" onclick="downloadQR('\${result.qr_url}', '\${result.email}')">
-                        <i class="fas fa-download"></i> Download
+                card.innerHTML = `
+                    <h3>${result.name}</h3>
+                    <p><i class="fas fa-envelope"></i> ${result.email}</p>
+                    <img src="${result.qr_url}" alt="QR Code for ${result.email}">
+                    <button class="btn btn-success" onclick="downloadQR('${result.qr_url}', '${result.email}')">
+                        <i class="fas fa-download"></i> Download QR
                     </button>
-                \`;
+                `;
                 grid.appendChild(card);
             });
+            
+            // Scroll to results
+            resultsDiv.scrollIntoView({ behavior: 'smooth' });
         }
         
         function downloadQR(url, email) {
             const a = document.createElement('a');
             a.href = url;
-            a.download = \`qr_\${email}.png\`;
+            a.download = `qr_${email.replace(/[^a-z0-9]/gi, '_')}.png`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -3457,14 +3711,40 @@ async def upload_qr_page(request: Request):
         
         function showMessage(text, type) {
             const messageDiv = document.getElementById('message');
-            messageDiv.className = type;
-            messageDiv.textContent = text;
+            messageDiv.className = `message ${type} show`;
+            messageDiv.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                ${text}
+            `;
+            
+            // Auto-hide success messages after 5 seconds
+            if (type === 'success') {
+                setTimeout(() => {
+                    messageDiv.classList.remove('show');
+                }, 5000);
+            }
+        }
+        
+        function resetForm() {
+            const fileInput = document.getElementById('csvFile');
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInfo = document.getElementById('fileInfo');
+            const uploadBtn = document.getElementById('uploadBtn');
+            const resultsDiv = document.getElementById('results');
+            const messageDiv = document.getElementById('message');
+            
+            fileInput.value = '';
+            selectedFile = null;
+            uploadArea.classList.remove('active');
+            fileInfo.classList.remove('show');
+            uploadBtn.disabled = true;
+            resultsDiv.style.display = 'none';
+            messageDiv.classList.remove('show');
         }
     </script>
 </body>
 </html>
     """)
-
 
 @router.post("/upload-csv-qr", response_model=BatchUploadResponse)
 async def upload_csv_qr(
