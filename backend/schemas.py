@@ -25,6 +25,22 @@ class BatchAttendeeResult(BaseModel):
     email: str
     invite_code: str
 
+# FIXED: Remove inheritance from AttendeeResult since BatchQRResult doesn't have invite_code
+class BatchQRResult(BaseModel):
+    name: str
+    email: str
+    qr_code_data: str
+    qr_url: str
+    id: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class BatchQRUploadResponse(BaseModel):
+    total_processed: int
+    success_count: int
+    skipped_emails: List[str]
+    results: List[BatchQRResult]
+
 class BatchUploadResponse(BaseModel):
     total_processed: int
     success_count: int
@@ -38,17 +54,3 @@ class GenerateQRCodesRequest(BaseModel):
 
 class QRVerificationRequest(BaseModel):
     qr_data: str  # The scanned QR code data
-
-
-class BatchQRResult(BaseModel):
-    name: str
-    email: str
-    qr_code_data: str
-    qr_url: str
-    id: Optional[int] = None
-
-class BatchQRUploadResponse(BaseModel):
-    total_processed: int
-    success_count: int
-    skipped_emails: List[str]
-    results: List[BatchQRResult]

@@ -3755,7 +3755,10 @@ async def upload_csv_qr(
     """Bulk import users for QR authentication (no biometric)"""
     is_auth, redirect_response = check_auth_and_redirect(request)
     if not is_auth:
-        return redirect_response
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated"
+        )
     
     if not file.filename.lower().endswith('.csv'):
         raise HTTPException(
@@ -3854,19 +3857,18 @@ async def upload_csv_qr(
         # Update IDs in results after commit
         for i, attendee in enumerate(new_attendees):
             results[i]["id"] = attendee.id
-            results[i]["qr_code_data"] = attendee.qr_code_data
         
         logger.info(
             f"✅ [Admin] QR Batch Import: {len(new_attendees)} created with QR codes, "
             f"{len(skipped_emails)} skipped"
         )
         
-        return {
-            "total_processed": len(new_attendees) + len(skipped_emails), 
-            "success_count": len(new_attendees),
-            "skipped_emails": skipped_emails,
-            "results": results
-        }
+        return BatchQRUploadResponse(
+            total_processed=len(new_attendees) + len(skipped_emails),
+            success_count=len(new_attendees),
+            skipped_emails=skipped_emails,
+            results=results
+        )
         
     except Exception as e:
         db.rollback()
