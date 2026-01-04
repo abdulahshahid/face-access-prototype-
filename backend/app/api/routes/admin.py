@@ -3570,7 +3570,7 @@ user3@example.com"></textarea>
             document.getElementById('message').innerHTML = '';
             
             try {
-                const response = await fetch('/api/generate-qr-codes', {
+                const response = await fetch('/api/admin/generate-qr-codes', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -3661,7 +3661,7 @@ user3@example.com"></textarea>
     """)
 
 
-@router.post("/api/generate-qr-codes")
+@router.post("/generate-qr-codes")
 async def generate_qr_codes_api(
     request: Request,
     emails: List[str] = None
