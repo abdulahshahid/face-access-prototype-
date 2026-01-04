@@ -3335,13 +3335,13 @@ async def upload_qr_page(request: Request):
         return redirect_response
     
     return HTMLResponse("""
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR Code Bulk Upload</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>QR Code Bulk Upload - Admin Portal</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * {
             margin: 0;
@@ -3350,62 +3350,123 @@ async def upload_qr_page(request: Request):
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0f;
+            color: #ffffff;
             min-height: 100vh;
-            padding: 20px;
+        }
+        
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 40% 20%, rgba(168, 85, 247, 0.1) 0%, transparent 40%);
+            z-index: 0;
         }
         
         .container {
+            position: relative;
+            z-index: 1;
             max-width: 1200px;
             margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px 24px;
+        }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.6);
+            text-decoration: none;
+            font-size: 14px;
+            margin-bottom: 32px;
+            transition: color 0.3s;
+        }
+        
+        .back-link:hover {
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 20px;
         }
         
         h1 {
-            color: #333;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #ffffff;
         }
         
         .subtitle {
-            color: #666;
-            margin-bottom: 30px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 40px;
+            font-size: 16px;
+            line-height: 1.6;
+            max-width: 800px;
+        }
+        
+        .upload-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 40px;
+            backdrop-filter: blur(10px);
+            margin-bottom: 32px;
         }
         
         .upload-area {
-            border: 3px dashed #667eea;
-            border-radius: 12px;
-            padding: 60px;
+            border: 3px dashed rgba(99, 102, 241, 0.4);
+            border-radius: 15px;
+            padding: 80px 40px;
             text-align: center;
             cursor: pointer;
             transition: all 0.3s;
+            background: rgba(255, 255, 255, 0.02);
             margin-bottom: 30px;
         }
         
         .upload-area:hover {
-            border-color: #764ba2;
-            background: #f8f9fa;
+            border-color: rgba(99, 102, 241, 0.7);
+            background: rgba(99, 102, 241, 0.05);
         }
         
         .upload-area.active {
-            border-color: #28a745;
-            background: #e8f5e9;
+            border-color: rgba(34, 197, 94, 0.7);
+            background: rgba(34, 197, 94, 0.05);
         }
         
         .upload-icon {
-            font-size: 64px;
-            color: #667eea;
-            margin-bottom: 20px;
+            font-size: 80px;
+            color: rgba(99, 102, 241, 0.7);
+            margin-bottom: 24px;
+            transition: all 0.3s;
         }
         
         .upload-area.active .upload-icon {
-            color: #28a745;
+            color: rgba(34, 197, 94, 0.7);
+        }
+        
+        .upload-area h3 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #ffffff;
+        }
+        
+        .upload-area p {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 16px;
+            margin-bottom: 20px;
         }
         
         input[type="file"] {
@@ -3413,55 +3474,69 @@ async def upload_qr_page(request: Request):
         }
         
         .btn {
-            padding: 12px 30px;
+            padding: 14px 28px;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
         }
         
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
             color: white;
         }
         
         .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
         }
         
         .btn-success {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.9) 0%, rgba(21, 128, 61, 0.9) 100%);
             color: white;
         }
         
         .btn-success:hover:not(:disabled) {
             transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(40, 167, 69, 0.4);
+            box-shadow: 0 10px 25px rgba(34, 197, 94, 0.3);
         }
         
         .btn:disabled {
-            opacity: 0.6;
+            opacity: 0.5;
             cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
         }
         
         .action-buttons {
             display: flex;
-            gap: 15px;
+            gap: 16px;
             justify-content: center;
-            margin-top: 20px;
+            margin-top: 30px;
         }
         
         .file-info {
             margin-top: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
             display: none;
         }
         
@@ -3471,17 +3546,18 @@ async def upload_qr_page(request: Request):
         
         .file-name {
             font-weight: 600;
-            color: #333;
-            margin-bottom: 5px;
+            color: #ffffff;
+            margin-bottom: 8px;
+            font-size: 16px;
         }
         
         .file-size {
-            color: #666;
+            color: rgba(255, 255, 255, 0.6);
             font-size: 14px;
         }
         
         .progress-container {
-            margin-top: 20px;
+            margin-top: 30px;
             display: none;
         }
         
@@ -3491,92 +3567,31 @@ async def upload_qr_page(request: Request):
         
         .progress-bar {
             width: 100%;
-            height: 10px;
-            background: #e9ecef;
-            border-radius: 5px;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
         }
         
         .progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
+            background: linear-gradient(90deg, #6366f1, #a855f7);
             width: 0%;
             transition: width 0.3s ease;
+            border-radius: 6px;
         }
         
         .progress-text {
             text-align: center;
-            color: #666;
+            color: rgba(255, 255, 255, 0.7);
             font-size: 14px;
-        }
-        
-        .results {
-            margin-top: 30px;
-        }
-        
-        .qr-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        
-        .qr-card {
-            background: white;
-            border: 2px solid #e0e0e0;
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            transition: transform 0.3s;
-        }
-        
-        .qr-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        }
-        
-        .qr-card img {
-            width: 200px;
-            height: 200px;
-            margin: 15px auto;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-        }
-        
-        .message {
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            display: none;
-        }
-        
-        .message.show {
-            display: block;
-        }
-        
-        .success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
         }
         
         .loading {
             display: none;
             text-align: center;
-            margin: 20px 0;
+            margin: 30px 0;
         }
         
         .loading.show {
@@ -3584,71 +3599,295 @@ async def upload_qr_page(request: Request):
         }
         
         .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(99, 102, 241, 0.3);
+            border-top-color: rgba(99, 102, 241, 1);
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
+            margin: 0 auto 20px;
         }
         
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 16px;
+        }
+        
+        .message {
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 30px;
+            display: none;
+            border: 1px solid transparent;
+        }
+        
+        .message.show {
+            display: block;
+        }
+        
+        .success {
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+        
+        .error {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+        
+        .info {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+        
+        .message i {
+            margin-right: 12px;
+            font-size: 18px;
+        }
+        
+        .results {
+            margin-top: 40px;
+            display: none;
+        }
+        
+        .results.show {
+            display: block;
+        }
+        
+        .results h2 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 30px;
+            color: #ffffff;
+        }
+        
+        .qr-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 24px;
+            margin-top: 20px;
+        }
+        
+        .qr-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+        }
+        
+        .qr-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(99, 102, 241, 0.3);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .qr-card h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #ffffff;
+        }
+        
+        .qr-card p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .qr-card img {
+            width: 200px;
+            height: 200px;
+            margin: 15px auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            background: white;
+            padding: 10px;
+        }
+        
+        .qr-card button {
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 16px 24px;
+            border-radius: 12px;
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #22c55e;
+            font-size: 14px;
+            z-index: 1000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+        }
+        
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        .toast.error {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+        
+        .template-info {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 30px;
+        }
+        
+        .template-info h4 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #ffffff;
+        }
+        
+        .code-block {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+        }
+        
+        .code-block pre {
+            color: rgba(255, 255, 255, 0.8);
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 0;
+        }
+        
+        .code-block code {
+            color: #4ecdc4;
+        }
+        
+        .file-requirements {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 14px;
+            margin-top: 15px;
+            text-align: center;
+        }
+        
+        @media (max-width: 768px) {
+            .container { padding: 24px 16px; }
+            .upload-card { padding: 24px; }
+            .upload-area { padding: 40px 20px; }
+            .upload-icon { font-size: 60px; }
+            .qr-grid { grid-template-columns: 1fr; }
+            .action-buttons { flex-direction: column; }
+            .btn { width: 100%; justify-content: center; }
+        }
+        
+        @media (max-width: 480px) {
+            .header { flex-direction: column; align-items: stretch; }
+            h1 { font-size: 28px; }
+            .subtitle { font-size: 14px; }
+            .upload-area h3 { font-size: 20px; }
         }
     </style>
 </head>
 <body>
+    <div class="bg-gradient"></div>
+    
     <div class="container">
-        <h1>
-            <i class="fas fa-qrcode"></i>
-            QR Code Bulk Upload
-        </h1>
-        <p class="subtitle">Upload CSV with name,email columns to generate QR codes automatically</p>
+        <a href="/api/admin/portal" class="back-link">
+            <i class="fas fa-arrow-left"></i> Back to Admin Portal
+        </a>
         
-        <div class="upload-area" id="uploadArea" onclick="document.getElementById('csvFile').click()">
-            <div class="upload-icon">
-                <i class="fas fa-cloud-upload-alt"></i>
+        <div class="header">
+            <h1><i class="fas fa-qrcode"></i> QR Code Bulk Upload</h1>
+        </div>
+        
+        <p class="subtitle">
+            Upload a CSV file with name and email columns to generate QR codes automatically. 
+            Each attendee will receive a unique QR code for authentication.
+        </p>
+        
+        <div class="upload-card">
+            <div class="upload-area" id="uploadArea" onclick="document.getElementById('csvFile').click()">
+                <div class="upload-icon">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                </div>
+                <h3>Click to upload CSV file</h3>
+                <p>CSV must have: name, email columns</p>
+                <input type="file" id="csvFile" accept=".csv" onchange="handleFileSelect()">
+                <p class="file-requirements">Max file size: 5MB • CSV format only</p>
             </div>
-            <h3>Click to upload CSV file</h3>
-            <p>CSV must have: name, email</p>
-            <input type="file" id="csvFile" accept=".csv" onchange="handleFileSelect()">
-        </div>
-        
-        <div class="file-info" id="fileInfo">
-            <div class="file-name" id="fileName"></div>
-            <div class="file-size" id="fileSize"></div>
-        </div>
-        
-        <div class="action-buttons">
-            <button class="btn btn-primary" id="uploadBtn" onclick="uploadCSV()" disabled>
-                <i class="fas fa-upload"></i> Upload CSV
-            </button>
-            <button class="btn" onclick="resetForm()" id="resetBtn">
-                <i class="fas fa-redo"></i> Reset
-            </button>
-        </div>
-        
-        <div class="progress-container" id="progressContainer">
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
+            
+            <div class="file-info" id="fileInfo">
+                <div class="file-name" id="fileName"></div>
+                <div class="file-size" id="fileSize"></div>
             </div>
-            <div class="progress-text" id="progressText">Uploading...</div>
+            
+            <div class="action-buttons">
+                <button class="btn btn-primary" id="uploadBtn" onclick="uploadCSV()" disabled>
+                    <i class="fas fa-upload"></i> Upload CSV
+                </button>
+                <button class="btn btn-secondary" onclick="resetForm()" id="resetBtn">
+                    <i class="fas fa-redo"></i> Reset
+                </button>
+            </div>
+            
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">Uploading...</div>
+            </div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Processing CSV and generating QR codes...</p>
+            </div>
+            
+            <div class="message" id="message"></div>
         </div>
         
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>Processing CSV and generating QR codes...</p>
+        <div class="template-info">
+            <h4>CSV Template Format:</h4>
+            <div class="code-block">
+<pre><code>name,email
+John Doe,john@example.com
+Jane Smith,jane@example.com
+Alex Johnson,alex@example.com</code></pre>
+            </div>
+            <button class="btn btn-secondary" onclick="downloadTemplate()">
+                <i class="fas fa-download"></i> Download Template
+            </button>
         </div>
         
-        <div class="message" id="message"></div>
-        
-        <div id="results" class="results" style="display: none;">
+        <div id="results" class="results">
             <h2>Generated QR Codes</h2>
             <div id="qrGrid" class="qr-grid"></div>
         </div>
     </div>
+    
+    <div class="toast" id="toast"></div>
     
     <script>
         let selectedFile = null;
@@ -3700,6 +3939,7 @@ async def upload_qr_page(request: Request):
             const progressFill = document.getElementById('progressFill');
             const progressText = document.getElementById('progressText');
             const loading = document.getElementById('loading');
+            const resultsDiv = document.getElementById('results');
             
             // Disable buttons and show progress
             uploadBtn.disabled = true;
@@ -3707,6 +3947,9 @@ async def upload_qr_page(request: Request):
             uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
             progressContainer.classList.add('show');
             loading.classList.add('show');
+            
+            // Hide any previous results
+            resultsDiv.style.display = 'none';
             
             // Simulate progress
             let progress = 0;
@@ -3720,8 +3963,6 @@ async def upload_qr_page(request: Request):
             formData.append('file', selectedFile);
             
             try {
-                // Note: Make sure the endpoint matches your API
-                // The HTML form says /api/admin/upload-csv-qr but your router is 
                 const response = await fetch('/api/admin/upload-csv-qr', {
                     method: 'POST',
                     body: formData
@@ -3731,31 +3972,38 @@ async def upload_qr_page(request: Request):
                 progressFill.style.width = '100%';
                 progressText.textContent = 'Processing complete!';
                 
+                if (!response.ok) {
+                    let errorText = await response.text();
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        throw new Error(errorJson.detail || errorJson.message || 'Upload failed');
+                    } catch (e) {
+                        throw new Error(errorText || `Server error: ${response.status}`);
+                    }
+                }
+                
                 const data = await response.json();
                 
-                if (response.ok) {
-                    if (data.success_count > 0) {
-                        displayResults(data.results);
-                        showMessage(
-                            `Successfully generated ${data.success_count} QR codes! ` +
-                            (data.skipped_emails?.length > 0 ? 
-                             `${data.skipped_emails.length} emails skipped (already exist).` : ''),
-                            'success'
-                        );
-                    } else {
-                        showMessage(
-                            'No new QR codes generated. ' +
-                            (data.skipped_emails?.length > 0 ? 
-                             `All ${data.skipped_emails.length} emails already exist.` : ''),
-                            'info'
-                        );
-                    }
+                if (data.success_count > 0) {
+                    displayResults(data.results);
+                    showMessage(
+                        `Successfully generated ${data.success_count} QR codes! ` +
+                        (data.skipped_emails?.length > 0 ? 
+                         `${data.skipped_emails.length} emails skipped (already exist).` : ''),
+                        'success'
+                    );
                 } else {
-                    throw new Error(data.detail || 'Upload failed');
+                    showMessage(
+                        'No new QR codes generated. ' +
+                        (data.skipped_emails?.length > 0 ? 
+                         `All ${data.skipped_emails.length} emails already exist.` : ''),
+                        'info'
+                    );
                 }
             } catch (error) {
                 clearInterval(progressInterval);
                 showMessage('Error: ' + error.message, 'error');
+                console.error('Upload error:', error);
             } finally {
                 // Reset UI
                 setTimeout(() => {
@@ -3770,17 +4018,21 @@ async def upload_qr_page(request: Request):
         
         function displayResults(results) {
             const resultsDiv = document.getElementById('results');
-            resultsDiv.style.display = 'block';
             const grid = document.getElementById('qrGrid');
             grid.innerHTML = '';
+            
+            if (results.length === 0) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
             
             results.forEach(result => {
                 const card = document.createElement('div');
                 card.className = 'qr-card';
                 card.innerHTML = `
-                    <h3>${result.name}</h3>
-                    <p><i class="fas fa-envelope"></i> ${result.email}</p>
-                    <img src="${result.qr_url}" alt="QR Code for ${result.email}">
+                    <h3>${escapeHtml(result.name)}</h3>
+                    <p><i class="fas fa-envelope"></i> ${escapeHtml(result.email)}</p>
+                    <img src="${result.qr_url}" alt="QR Code for ${escapeHtml(result.email)}">
                     <button class="btn btn-success" onclick="downloadQR('${result.qr_url}', '${result.email}')">
                         <i class="fas fa-download"></i> Download QR
                     </button>
@@ -3788,8 +4040,13 @@ async def upload_qr_page(request: Request):
                 grid.appendChild(card);
             });
             
+            resultsDiv.style.display = 'block';
+            resultsDiv.classList.add('show');
+            
             // Scroll to results
-            resultsDiv.scrollIntoView({ behavior: 'smooth' });
+            setTimeout(() => {
+                resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
         }
         
         function downloadQR(url, email) {
@@ -3799,6 +4056,27 @@ async def upload_qr_page(request: Request):
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
+            showToast('QR code downloaded!');
+        }
+        
+        function downloadTemplate() {
+            const csvContent = 'name,email\nJohn Doe,john@example.com\nJane Smith,jane@example.com\nAlex Johnson,alex@example.com';
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'qr_upload_template.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            showToast('Template downloaded!');
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
         
         function showMessage(text, type) {
@@ -3806,7 +4084,7 @@ async def upload_qr_page(request: Request):
             messageDiv.className = `message ${type} show`;
             messageDiv.innerHTML = `
                 <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
-                ${text}
+                ${escapeHtml(text)}
             `;
             
             // Auto-hide success messages after 5 seconds
@@ -3817,6 +4095,14 @@ async def upload_qr_page(request: Request):
             }
         }
         
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast';
+            toast.classList.add(type, 'show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
         function resetForm() {
             const fileInput = document.getElementById('csvFile');
             const uploadArea = document.getElementById('uploadArea');
@@ -3824,6 +4110,7 @@ async def upload_qr_page(request: Request):
             const uploadBtn = document.getElementById('uploadBtn');
             const resultsDiv = document.getElementById('results');
             const messageDiv = document.getElementById('message');
+            const progressFill = document.getElementById('progressFill');
             
             fileInput.value = '';
             selectedFile = null;
@@ -3832,12 +4119,14 @@ async def upload_qr_page(request: Request):
             uploadBtn.disabled = true;
             resultsDiv.style.display = 'none';
             messageDiv.classList.remove('show');
+            progressFill.style.width = '0%';
         }
     </script>
 </body>
 </html>
     """)
 
+    
 @router.post("/upload-csv-qr", response_model=BatchQRUploadResponse)
 async def upload_csv_qr(
     request: Request,
